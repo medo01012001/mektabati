@@ -11,6 +11,8 @@
     <script>tailwind.config = { darkMode: 'class' };</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- كينقي الـ HTML اللي جاي من ملفات Word قبل ما يتعرض (حماية من XSS) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
     <!-- Supabase: الحسابات، القاعدة، تخزين الملفات -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
 
@@ -42,6 +44,17 @@
            100dvh = الطول الحقيقي اللي باين، وكيتبدل ملي تتخبى ولا تبان البارات */
         .h-screen { height: 100vh; height: 100dvh; }
         #mobileNav { padding-bottom: env(safe-area-inset-bottom); height: calc(4rem + env(safe-area-inset-bottom)); }
+        /* القارئ ديال Word */
+        .doc-reader { font-family: 'Amiri', 'Cairo', serif; line-height: 2; font-size: calc(1.15rem * var(--doc-zoom, 1)); word-wrap: break-word; }
+        .doc-reader h1 { font-size: 1.8em; font-weight: 800; margin: 1.2em 0 .6em; }
+        .doc-reader h2 { font-size: 1.45em; font-weight: 700; margin: 1.1em 0 .5em; }
+        .doc-reader h3, .doc-reader h4 { font-size: 1.2em; font-weight: 700; margin: 1em 0 .4em; }
+        .doc-reader p { margin: 0 0 .9em; }
+        .doc-reader ul, .doc-reader ol { margin: 0 1.5em .9em; list-style: revert; }
+        .doc-reader img { max-width: 100%; height: auto; margin: 1em auto; display: block; }
+        .doc-reader table { border-collapse: collapse; margin: 1em 0; width: 100%; font-size: .9em; }
+        .doc-reader td, .doc-reader th { border: 1px solid #d1d5db; padding: .4em .6em; }
+        .doc-reader a { color: #2563eb; text-decoration: underline; }
         /* المحادثات */
         #mainScrollArea.chat-mode { padding: 0; overflow: hidden; }
         @media (min-width: 768px) { #mainScrollArea.chat-mode { padding: 1.5rem; } }
@@ -398,15 +411,20 @@
                         <button onclick="zoomReader(-0.2)" class="hover:text-blue-400 px-1 font-bold" title="تصغير">−</button>
                         <button onclick="zoomReader(0.2)" class="hover:text-blue-400 px-1 font-bold" title="تكبير">+</button>
                         <span class="w-px h-5 bg-gray-500 mx-1"></span>
-                        <button onclick="prevPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
-                        <input type="number" id="page_num_input" onchange="goToPage(this.value)" class="w-12 text-center bg-gray-600 text-white font-bold rounded outline-none focus:ring-2 focus:ring-blue-500" value="1">
-                        <span>/ <span id="page_count">?</span></span>
-                        <button onclick="nextPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
+                        <span id="pdfPageControls" class="flex items-center gap-1">
+                            <button onclick="prevPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
+                            <input type="number" id="page_num_input" onchange="goToPage(this.value)" class="w-12 text-center bg-gray-600 text-white font-bold rounded outline-none focus:ring-2 focus:ring-blue-500" value="1">
+                            <span>/ <span id="page_count">?</span></span>
+                            <button onclick="nextPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
+                        </span>
+                        <span id="docProgressLabel" class="hidden font-bold px-2">0%</span>
                     </div>
                 </div>
                 <div class="flex-1 overflow-auto flex justify-center items-start p-4 bg-gray-900 relative" id="canvasContainer">
                     <div id="readerLoading" class="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-300 text-sm font-bold"><div class="spinner"></div><span id="readerLoadingText">جاري تحميل الكتاب...</span></div>
                     <canvas id="pdf-render" class="shadow-2xl max-w-full h-auto bg-white"></canvas>
+                    <!-- القارئ ديال ملفات Word -->
+                    <article id="docReader" dir="auto" class="hidden doc-reader bg-white text-gray-900 w-full max-w-3xl rounded-lg shadow-2xl px-5 py-8 md:px-12 md:py-12"></article>
                 </div>
             </div>
 
@@ -432,8 +450,8 @@
             </div>
             <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto hide-scrollbar">
                 <div>
-                    <label class="block text-sm font-bold text-dynamic-main mb-1">ملف الـ PDF <span class="text-dynamic-muted font-normal">(حتى 50MB، كيتحفظ أونلاين ☁️)</span></label>
-                    <input type="file" id="pdfFile" accept="application/pdf,.pdf" onchange="onPdfPicked(this)" class="field text-sm">
+                    <label class="block text-sm font-bold text-dynamic-main mb-1">ملف الكتاب: PDF ولا Word <span class="text-dynamic-muted font-normal">(حتى 50MB، كيتحفظ أونلاين ☁️)</span></label>
+                    <input type="file" id="pdfFile" accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="onPdfPicked(this)" class="field text-sm">
                 </div>
                 <div><label class="block text-sm font-bold text-dynamic-main mb-1">عنوان الكتاب</label><input type="text" id="bookTitle" maxlength="200" class="field"></div>
                 <div><label class="block text-sm font-bold text-dynamic-main mb-1">اسم المؤلف</label><input type="text" id="bookAuthor" maxlength="200" class="field"></div>
@@ -710,6 +728,70 @@
                 const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
                 return new TextDecoder('latin1').decode(head).includes('%PDF');
             } catch (e) { return null; }
+        }
+
+        // نوع الملف من البايتات الأولى: pdf / docx / doc (Word القديم) / other / null (ما تقراش)
+        const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        async function sniffBookFile(file) {
+            try {
+                const b = new Uint8Array(await file.slice(0, 2048).arrayBuffer());
+                const text = new TextDecoder('latin1').decode(b);
+                if (text.includes('%PDF')) return 'pdf';
+                if (b[0] === 0x50 && b[1] === 0x4B && b[2] === 0x03 && b[3] === 0x04) {   // ZIP = docx
+                    return (/\.docx$/i.test(file.name) || file.type === DOCX_MIME || text.includes('word/') || text.includes('[Content_Types].xml')) ? 'docx' : 'other';
+                }
+                if (b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0) return 'doc';
+                return 'other';
+            } catch (e) { return null; }
+        }
+
+        // مكتبة Word (كبيرة شوية) كتتحمل غير ملي نحتاجوها
+        let mammothLoading = null;
+        function loadMammoth() {
+            if (window.mammoth) return Promise.resolve();
+            return mammothLoading = mammothLoading || new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js';
+                s.onload = resolve;
+                s.onerror = () => { mammothLoading = null; s.remove(); reject(new Error('Failed to fetch')); };
+                document.head.appendChild(s);
+            });
+        }
+
+        // عدد الصفحات التقريبي ديال ملف Word (250 كلمة ف الصفحة)
+        async function readDocxInfo(file) {
+            const work = (async () => {
+                await loadMammoth();
+                const r = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+                const words = r.value.trim().split(/\s+/).filter(Boolean).length;
+                return { pages: Math.max(1, Math.ceil(words / 250)) };
+            })().catch(e => { console.warn('readDocxInfo', e); return null; });
+            return (await withTimeout(work, 25000)) || { pages: Math.max(1, Math.round(file.size / 40000)), broken: true };
+        }
+
+        // غلاف فيه العنوان والكاتب (للكتب اللي ما فيهاش صفحة نصوروها)
+        async function makeTextCover(title, author) {
+            try { await document.fonts.load('bold 44px Cairo'); } catch (e) {}
+            const c = document.createElement('canvas'); c.width = 450; c.height = 675;
+            const g = c.getContext('2d');
+            const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#3b82f6';
+            const grad = g.createLinearGradient(0, 0, 450, 675);
+            grad.addColorStop(0, primary); grad.addColorStop(1, '#1e1b4b');
+            g.fillStyle = grad; g.fillRect(0, 0, 450, 675);
+            g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(28, 28, 394, 619);
+            g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2; g.strokeRect(40, 40, 370, 595);
+            g.direction = 'rtl'; g.textAlign = 'center'; g.fillStyle = '#fff';
+            // نقسمو العنوان على سطور
+            g.font = 'bold 40px Cairo, sans-serif';
+            const words = String(title).split(/\s+/); const lines = []; let line = '';
+            for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > 330 && line) { lines.push(line); line = w; } else line = t; }
+            if (line) lines.push(line);
+            const shown = lines.slice(0, 6);
+            let y = 300 - (shown.length - 1) * 30;
+            shown.forEach(l => { g.fillText(l, 225, y); y += 60; });
+            if (author) { g.font = '26px Cairo, sans-serif'; g.fillStyle = 'rgba(255,255,255,.85)'; g.fillText(String(author).slice(0, 40), 225, 560); }
+            g.font = 'bold 18px Cairo, sans-serif'; g.fillStyle = 'rgba(255,255,255,.7)'; g.fillText('📄 Word', 225, 610);
+            return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
         }
 
         const withTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
@@ -1042,6 +1124,7 @@
                         <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"><span class="bg-white/90 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full">📖 اقرأ</span></div>
                         <img src="${escapeHtml(coverUrl(book))}" alt="" loading="lazy" class="w-full h-full object-cover" onerror="this.src='${defaultCover}'">
                         ${fromBadge}
+                        ${book.file_type === 'docx' ? `<span class="absolute top-2 left-2 z-20 bg-blue-700 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">Word</span>` : ''}
                     </div>
                     <div class="flex-1 flex flex-col justify-between">
                         <div class="cursor-pointer" onclick="openBookDetails('${book.id}')" title="التفاصيل والتقييم"><h4 class="font-bold text-dynamic-main text-sm truncate hover:underline">${escapeHtml(book.title)}</h4><div class="flex items-center justify-between gap-1"><p class="text-xs text-dynamic-muted truncate">${escapeHtml(book.author || 'غير معروف')}</p>${ratingBadge(book.id)}</div></div>
@@ -1068,6 +1151,7 @@
                         <img src="${escapeHtml(coverUrl(book))}" alt="" loading="lazy" class="w-full h-full object-cover" onerror="this.src='${defaultCover}'">
                         ${inLib ? `<span class="absolute top-2 right-2 z-20 bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full shadow">✓ ف مكتبتي</span>` : ''}
                         <span class="absolute top-2 left-2 z-20 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full" title="${escapeHtml(vis.label)}">${vis.icon}</span>
+                        ${book.file_type === 'docx' ? `<span class="absolute bottom-2 left-2 z-20 bg-blue-700 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">Word</span>` : ''}
                     </div>
                     <h4 class="font-bold text-dynamic-main text-sm truncate">${escapeHtml(book.title)}</h4>
                     <div class="flex items-center justify-between gap-1"><p class="text-xs text-dynamic-muted truncate">${escapeHtml(book.author || 'غير معروف')}</p>${ratingBadge(book.id)}</div>
@@ -1248,6 +1332,12 @@
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') document.querySelectorAll('.modal').forEach(m => { if (!m.classList.contains('hidden')) closeModal(m.id); });
             if (currentView === 'reader' && !e.target.matches('input, textarea')) {
+                if (docMode) {   // Word: الأسهم كيسكرولاو شاشة كاملة
+                    const c = document.getElementById('canvasContainer'), step = c.clientHeight * 0.9;
+                    if (e.key === 'ArrowLeft' || e.key === 'PageDown') c.scrollBy({ top: step, behavior: 'smooth' });
+                    if (e.key === 'ArrowRight' || e.key === 'PageUp') c.scrollBy({ top: -step, behavior: 'smooth' });
+                    return;
+                }
                 if (e.key === 'ArrowLeft') nextPage();   // RTL: اليسار = الصفحة الجاية
                 if (e.key === 'ArrowRight') prevPage();
             }
@@ -1266,7 +1356,7 @@
         function onPdfPicked(input) {
             const f = input.files[0]; if (!f) return;
             const t = document.getElementById('bookTitle');
-            if (!t.value.trim()) t.value = f.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, 200);
+            if (!t.value.trim()) t.value = f.name.replace(/\.(pdf|docx?)$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, 200);
             if (f.size > MAX_PDF_BYTES) toast(`الملف ${formatMB(f.size)}، والحد هو 50MB`, 'error');
         }
 
@@ -1316,33 +1406,36 @@
             const visibility = document.getElementById('bookVisibility').value;
             const file = document.getElementById('pdfFile').files[0];
             const custom = document.getElementById('customCoverFile').files[0];
-            if (!file) { toast('اختار ملف PDF', 'error'); return; }
+            if (!file) { toast('اختار ملف PDF ولا Word', 'error'); return; }
             if (!title) { toast('كتب عنوان الكتاب', 'error'); return; }
             if (file.size > MAX_PDF_BYTES) { toast(`الملف ${formatMB(file.size)}، والحد هو 50MB`, 'error'); return; }
-            const isPdf = await sniffPdf(file);
-            if (isPdf === null) { toast('ما قدرناش نقراو الملف. اختارو من الذاكرة ديال التيليفون (ماشي من Drive)، ولا عطي الصلاحية للمتصفح وعاود.', 'error'); return; }
-            if (!isPdf) { toast('هاد الملف ماشي PDF. اختار ملف .pdf', 'error'); return; }
+            const kind = await sniffBookFile(file);
+            if (kind === null) { toast('ما قدرناش نقراو الملف. اختارو من الذاكرة ديال التيليفون (ماشي من Drive)، ولا عطي الصلاحية للمتصفح وعاود.', 'error'); return; }
+            if (kind === 'doc') { toast('هادي صيغة Word القديمة (.doc). حلها ف Word ودير "Enregistrer sous" ← .docx ولا PDF، وعاود رفعها.', 'error'); return; }
+            if (kind === 'other') { toast('هاد الملف ماشي PDF ولا Word (.docx)', 'error'); return; }
+            const isDocx = kind === 'docx';
 
             const btn = document.getElementById('addBtn');
             const cancelBtn = document.getElementById('cancelUploadBtn');
             const id = crypto.randomUUID();
-            const pdfPath = `${me.id}/${id}.pdf`;
+            const pdfPath = `${me.id}/${id}.${isDocx ? 'docx' : 'pdf'}`;
             let coverPath = null, pdfUploaded = false;
             try {
                 // 1. الرفع هو الأول (هو المهم)، مع نسبة التقدم
                 setBusy(btn, true, 'جاري الرفع... ⏳');
                 cancelBtn.classList.remove('hidden');
                 showUploadProgress('جاري رفع الكتاب...', 0, file.size);
-                await uploadWithProgress('pdfs', pdfPath, file, 'application/pdf', (l, t) => showUploadProgress('جاري رفع الكتاب...', l, t));
+                await uploadWithProgress('pdfs', pdfPath, file, isDocx ? DOCX_MIME : 'application/pdf', (l, t) => showUploadProgress('جاري رفع الكتاب...', l, t));
                 pdfUploaded = true;
                 cancelBtn.classList.add('hidden');
 
                 // 2. الغلاف وعدد الصفحات. إلا فشلو، الكتاب كيتحفظ عادي
                 showUploadProgress('كنصايبو الغلاف...', file.size, file.size);
                 setBusy(btn, true, 'كنصايبو الغلاف...');
-                const info = await readPdfInfo(file);
-                let coverBlob = info.coverBlob;
+                const info = isDocx ? await readDocxInfo(file) : await readPdfInfo(file);
+                let coverBlob = isDocx ? null : info.coverBlob;
                 if (custom) { try { coverBlob = await resizeImage(custom, 600); } catch (e) {} }
+                if (!coverBlob && isDocx) { try { coverBlob = await makeTextCover(title, author); } catch (e) {} }
 
                 if (coverBlob) {
                     coverPath = `${me.id}/covers/${id}.jpg`;
@@ -1351,14 +1444,16 @@
                 }
 
                 setBusy(btn, true, 'جاري الحفظ...');
-                const ins = await sb.from('books').insert({ id, title, author, category, visibility, pdf_path: pdfPath, cover_path: coverPath, total_pages: info.pages, file_size: file.size });
+                const row = { id, title, author, category, visibility, pdf_path: pdfPath, cover_path: coverPath, total_pages: info.pages, file_size: file.size };
+                if (isDocx) row.file_type = 'docx';
+                const ins = await sb.from('books').insert(row);
                 if (ins.error) throw ins.error;
                 const st = await sb.from('book_state').insert({ book_id: id });
                 if (st.error) throw st.error;
 
                 cachePdf(id, file);
                 closeModal('addModal');
-                toast(info.broken && !custom ? 'تزاد الكتاب ✅ (الغلاف غادي يتصايب ملي تحلو أول مرة)' : 'تزاد الكتاب لمكتبتك ✅', 'success');
+                toast(info.broken && !custom && !isDocx ? 'تزاد الكتاب ✅ (الغلاف غادي يتصايب ملي تحلو أول مرة)' : 'تزاد الكتاب لمكتبتك ✅', 'success');
                 await loadLibrary(); renderAll();
             } catch (e) {
                 console.error('addBook', e);
@@ -2168,13 +2263,22 @@
             const token = ++readerToken;
             if (currentView !== 'reader') readerReturnView = currentView;
             closeModal('bookDetailsModal');
+            docRestoring = true;   // ما نحفظو والو حتى يتحل الكتاب الجديد ويرجع لبلاصتو
             currentReadingBookId = id; readerZoom = 1;
+            docMode = book.file_type === 'docx';
             document.getElementById('readerTitle').innerText = book.title;
             document.getElementById('readerAddBtn').classList.toggle('hidden', !!inLib);
             document.getElementById('page_count').textContent = book.total_pages || '?';
             document.getElementById('readerLoading').classList.remove('hidden');
             document.getElementById('readerLoadingText').textContent = 'جاري تحميل الكتاب...';
+            // PDF: صفحات. Word: نص كيتسكرولا مع النسبة
+            document.getElementById('pdfPageControls').classList.toggle('hidden', docMode);
+            document.getElementById('docProgressLabel').classList.toggle('hidden', !docMode);
+            document.getElementById('docReader').classList.add('hidden');
+            canvas.classList.toggle('hidden', docMode);
             canvas.classList.add('invisible');
+            document.getElementById('docReader').innerHTML = '';
+            document.getElementById('canvasContainer').scrollTop = 0;   // ما نبقاوش ف البلاصة ديال الكتاب اللي قبل
             switchView('reader');
             try {
                 let blob = await getCachedPdf(id);
@@ -2185,6 +2289,7 @@
                     blob = data; cachePdf(id, blob);
                 }
                 if (token !== readerToken) return; // سد القارئ ولا حل كتاب آخر
+                if (docMode) { await renderDocx(book, inLib, blob, token); return; }
                 const task = pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) });
                 // PDF محمي بكلمة السر
                 task.onPassword = (update, reason) => {
@@ -2206,6 +2311,53 @@
                 uncachePdf(id);
             }
         }
+
+        // ---------- قارئ Word ----------
+        let docMode = false;
+        let docRestoring = false;   // ما نحفظوش التقدم حتى نرجعو للبلاصة اللي وقف فيها
+        const docContainer = document.getElementById('canvasContainer');
+        async function renderDocx(book, inLib, blob, token) {
+            docRestoring = true;
+            document.getElementById('readerLoadingText').textContent = 'كنحضرو الكتاب...';
+            await loadMammoth();
+            const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+            if (token !== readerToken) return;
+            const el = document.getElementById('docReader');
+            // النص جاي من ملف رفعو شي مستخدم: كنقيوه من أي كود قبل ما نعرضوه
+            el.innerHTML = DOMPurify.sanitize(result.value, { FORBID_TAGS: ['style', 'form', 'input', 'button', 'iframe'], FORBID_ATTR: ['style'] });
+            el.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+            if (!el.textContent.trim() && !el.querySelector('img')) el.innerHTML = '<p style="text-align:center;color:#6b7280">هاد الملف خاوي</p>';
+            el.style.setProperty('--doc-zoom', readerZoom);
+            el.classList.remove('hidden');
+            document.getElementById('readerLoading').classList.add('hidden');
+            // نرجعو للبلاصة اللي وقفتي فيها
+            // كنرجعو بالنسبة المحفوظة (أدق من الصفحة التقريبية ف الكتب القصيرة)
+            const startFrac = inLib ? Math.min(1, Math.max(0, (inLib.st.progress || 0) / 100)) : 0;
+            requestAnimationFrame(() => {
+                docContainer.scrollTop = startFrac * (docContainer.scrollHeight - docContainer.clientHeight);
+                updateDocProgress(false);
+                setTimeout(() => { if (token === readerToken) docRestoring = false; }, 400);
+            });
+        }
+        // النسبة من السكرول، والحفظ (current_page = الصفحة التقريبية)
+        function updateDocProgress(save = true) {
+            if (!docMode || currentView !== 'reader') return;
+            const el = document.getElementById('docReader');
+            if (!el.childElementCount) return;   // النص مازال ما تحطش: ما نحسبو والو
+            const max = docContainer.scrollHeight - docContainer.clientHeight;
+            const frac = max > 0 ? Math.min(1, docContainer.scrollTop / max) : 1;
+            document.getElementById('docProgressLabel').textContent = Math.round(frac * 100) + '%';
+            if (!save || docRestoring) return;
+            const book = library.find(b => b.id === currentReadingBookId);
+            if (!book) return;   // ماشي ف مكتبتي: ما كنحفظوش
+            const total = Math.max(1, book.total_pages || 1);
+            const changes = { current_page: Math.max(1, Math.round(frac * (total - 1)) + 1), progress: Math.round(frac * 100) };
+            if (frac > 0.98) changes.is_read = true;
+            Object.assign(book.st, changes);
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => flushProgress(book.id, changes), 1200);
+        }
+        docContainer.addEventListener('scroll', () => { if (docMode) updateDocProgress(true); }, { passive: true });
 
         function renderPage(num) {
             if (!currentPdfDoc) return;
@@ -2245,12 +2397,17 @@
         function prevPage() { if (!currentPdfDoc || pageNum <= 1) return; pageNum--; queueRenderPage(pageNum); }
         function nextPage() { if (!currentPdfDoc || pageNum >= currentPdfDoc.numPages) return; pageNum++; queueRenderPage(pageNum); }
         function goToPage(v) { const n = parseInt(v, 10); if (currentPdfDoc && n >= 1 && n <= currentPdfDoc.numPages) { pageNum = n; queueRenderPage(n); } else document.getElementById('page_num_input').value = pageNum; }
-        function zoomReader(delta) { readerZoom = Math.min(3, Math.max(0.5, readerZoom + delta)); queueRenderPage(pageNum); }
+        function zoomReader(delta) {
+            readerZoom = Math.min(3, Math.max(0.5, readerZoom + delta));
+            if (docMode) document.getElementById('docReader').style.setProperty('--doc-zoom', readerZoom);
+            else queueRenderPage(pageNum);
+        }
 
         function stopReader() {
             readerToken++;
             if (saveTimer) { clearTimeout(saveTimer); const b = library.find(x => x.id === currentReadingBookId); if (b) flushProgress(b.id, { current_page: b.st.current_page, progress: b.st.progress, is_read: b.st.is_read }); saveTimer = null; }
             if (currentPdfDoc) { currentPdfDoc.destroy(); currentPdfDoc = null; }
+            if (docMode) { document.getElementById('docReader').innerHTML = ''; docMode = false; }
             renderAll();
         }
         // كتاب ترفع بلا غلاف ولا بعدد صفحات غالط (ملي فشل التحليل ف التيليفون): كنصلحوه دابا
@@ -2290,6 +2447,7 @@
             c.addEventListener('touchend', e => {
                 if (x0 === null) return;
                 const dx = e.changedTouches[0].clientX - x0; x0 = null;
+                if (docMode) return;   // Word كيتقرا بالسكرول العادي
                 if (Math.abs(dx) > 60) { dx > 0 ? nextPage() : prevPage(); } // RTL
             });
         })();
