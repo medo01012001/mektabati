@@ -1035,14 +1035,9 @@
             return `
                 <div class="bg-dynamic-card rounded-2xl p-3 shadow-sm hover:shadow-xl transition-all border border-dynamic flex flex-col relative mt-2 group">
                     ${isNew ? `<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] font-extrabold px-3 py-0.5 rounded-full shadow-lg z-30 border-2 border-white">جديد</div>` : ''}
-                    <div class="absolute top-3 left-3 flex gap-1.5 z-20 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                        ${owner ? `<button onclick="event.stopPropagation(); openEditModal('${book.id}')" title="تعديل" class="bg-blue-100 p-1.5 rounded-full text-blue-600 shadow-md hover:scale-110 transition">${svg('edit')}</button>` : ''}
-                        <button onclick="event.stopPropagation(); openFriendPicker('${book.id}')" title="شارك مع صديق" class="bg-green-100 p-1.5 rounded-full text-green-700 shadow-md hover:scale-110 transition">${svg('share')}</button>
-                        <button onclick="event.stopPropagation(); openNotesModal('${book.id}')" title="ملاحظات" class="bg-yellow-100 p-1.5 rounded-full text-yellow-600 shadow-md hover:scale-110 transition">${svg('notes')}</button>
-                        <button onclick="event.stopPropagation(); deleteBook('${book.id}')" title="${owner ? 'مسح الكتاب' : 'حيد من مكتبتي'}" class="bg-red-100 p-1.5 rounded-full text-red-600 shadow-md hover:scale-110 transition">${svg('trash')}</button>
-                    </div>
-                    <button onclick="event.stopPropagation(); toggleFav('${book.id}')" title="المفضلة" class="absolute top-3 right-3 z-20 ${st.is_favorite ? 'text-red-500' : 'text-gray-300 hover:text-red-400'} bg-white/90 dark:bg-gray-800/90 p-1.5 rounded-full shadow-md transition hover:scale-110">${svg('heart', 'w-5 h-5', st.is_favorite ? 'currentColor' : 'none')}</button>
-                    <button onclick="event.stopPropagation(); toggleRead('${book.id}')" title="مكتمل" class="absolute top-12 right-3 z-20 ${st.is_read ? 'text-green-500 bg-green-50' : 'text-gray-300 bg-white/90 hover:text-green-500'} p-1.5 rounded-full shadow-md transition hover:scale-110">${svg('check', 'w-5 h-5')}</button>
+                    <!-- المفضلة ومكتمل: فوق الغلاف على اليمين -->
+                    <button onclick="event.stopPropagation(); toggleFav('${book.id}')" title="المفضلة" class="absolute top-4 right-4 z-20 ${st.is_favorite ? 'text-red-500' : 'text-gray-400 hover:text-red-400'} bg-white/90 dark:bg-gray-800/90 p-1.5 rounded-full shadow-md transition hover:scale-110">${svg('heart', 'w-4 h-4 md:w-5 md:h-5', st.is_favorite ? 'currentColor' : 'none')}</button>
+                    <button onclick="event.stopPropagation(); toggleRead('${book.id}')" title="مكتمل" class="absolute top-12 md:top-14 right-4 z-20 ${st.is_read ? 'text-green-500 bg-green-50' : 'text-gray-400 bg-white/90 dark:bg-gray-800/90 hover:text-green-500'} p-1.5 rounded-full shadow-md transition hover:scale-110">${svg('check', 'w-4 h-4 md:w-5 md:h-5')}</button>
                     <div class="relative w-full aspect-[2/3] rounded-xl overflow-hidden mb-3 bg-gray-200 dark:bg-gray-700 cursor-pointer" onclick="openReader('${book.id}')">
                         <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"><span class="bg-white/90 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full">📖 اقرأ</span></div>
                         <img src="${escapeHtml(coverUrl(book))}" alt="" loading="lazy" class="w-full h-full object-cover" onerror="this.src='${defaultCover}'">
@@ -1051,6 +1046,13 @@
                     <div class="flex-1 flex flex-col justify-between">
                         <div class="cursor-pointer" onclick="openBookDetails('${book.id}')" title="التفاصيل والتقييم"><h4 class="font-bold text-dynamic-main text-sm truncate hover:underline">${escapeHtml(book.title)}</h4><div class="flex items-center justify-between gap-1"><p class="text-xs text-dynamic-muted truncate">${escapeHtml(book.author || 'غير معروف')}</p>${ratingBadge(book.id)}</div></div>
                         <div class="mt-3 flex items-center gap-2"><div class="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all" style="width: ${st.progress}%; background-color: var(--primary)"></div></div><span class="text-[10px] text-dynamic-muted font-bold w-8 text-left">${st.progress}%</span></div>
+                        <!-- الأزرار تحت الكتاب: ما كيغطيوش الغلاف ولا المفضلة، وساهلين ف التيليفون -->
+                        <div class="mt-2 pt-2 border-t border-dynamic flex items-center justify-around">
+                            ${owner ? `<button onclick="event.stopPropagation(); openEditModal('${book.id}')" title="تعديل" aria-label="تعديل" class="p-1.5 rounded-lg text-blue-500 hover:bg-blue-500/10 transition">${svg('edit')}</button>` : ''}
+                            <button onclick="event.stopPropagation(); openFriendPicker('${book.id}')" title="شارك مع صديق" aria-label="شارك مع صديق" class="p-1.5 rounded-lg text-green-600 hover:bg-green-500/10 transition">${svg('share')}</button>
+                            <button onclick="event.stopPropagation(); openNotesModal('${book.id}')" title="ملاحظات" aria-label="ملاحظات" class="p-1.5 rounded-lg text-yellow-500 hover:bg-yellow-500/10 transition">${svg('notes')}</button>
+                            <button onclick="event.stopPropagation(); deleteBook('${book.id}')" title="${owner ? 'مسح الكتاب' : 'حيد من مكتبتي'}" aria-label="${owner ? 'مسح الكتاب' : 'حيد من مكتبتي'}" class="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition">${svg('trash')}</button>
+                        </div>
                     </div>
                 </div>`;
         }
