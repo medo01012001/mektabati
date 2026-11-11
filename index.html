@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title id="pageTitle">مكتبتي - عالم من المعرفة</title>
+
+    <!-- مكتبات التصميم والأدوات -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Supabase: الحسابات، القاعدة، تخزين الملفات -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --app-bg: #f8f9fc; --card-bg: #ffffff; --text-main: #1f2937; --text-muted: #6b7280; --border-color: #e5e7eb; --primary: #3b82f6; --sidebar-bg: #0f172a; }
+        [data-theme="dark"] { --app-bg: #0f172a; --card-bg: #1e293b; --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: #334155; --sidebar-bg: #020617; }
+        body { font-family: 'Cairo', sans-serif; background-color: var(--app-bg); color: var(--text-main); transition: background-color 0.3s ease; background-attachment: fixed; }
+        .book-title-font { font-family: 'Amiri', serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .wood-texture { background-image: url('https://www.transparenttextures.com/patterns/wood-pattern.png'); }
+        .bg-dynamic-card { background-color: var(--card-bg); }
+        .border-dynamic { border-color: var(--border-color); }
+        .text-dynamic-main { color: var(--text-main); }
+        .text-dynamic-muted { color: var(--text-muted); }
+        .bg-dynamic-sidebar { background-color: var(--sidebar-bg); }
+        .field { width: 100%; background: var(--app-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 0.75rem 1rem; outline: none; transition: border-color .2s; }
+        .field:focus { border-color: var(--primary); }
+        .texture-radio:checked + div { border-color: var(--primary); }
+        .chip { padding: .35rem .9rem; border-radius: 999px; font-size: .8rem; font-weight: 700; border: 1px solid var(--border-color); color: var(--text-muted); background: var(--card-bg); transition: all .2s; white-space: nowrap; }
+        .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .msg-anim { animation: fadeIn 0.3s ease forwards; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { width: 2.5rem; height: 2.5rem; border: 4px solid rgba(148,163,184,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden relative">
+
+    <!-- شاشة التحميل الأولى -->
+    <div id="appLoading" class="fixed inset-0 bg-[#0f172a] z-[300] flex items-center justify-center"><div class="spinner"></div></div>
+
+    <!-- نافذة تسجيل الدخول / إنشاء حساب -->
+    <div id="authOverlay" class="fixed inset-0 bg-[#0f172a] z-[200] hidden items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-dynamic-card w-full max-w-md rounded-3xl shadow-2xl p-8 border border-dynamic">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center p-3 rounded-2xl bg-blue-50 text-blue-600 mb-4 shadow-inner">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                </div>
+                <h2 class="text-3xl font-extrabold text-dynamic-main mb-2">مجتمع مكتبتي</h2>
+                <p class="text-dynamic-muted text-sm">كتبك ديما معاك، وشاركها مع أصدقائك</p>
+            </div>
+            <div id="authTabs" class="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-6">
+                <button id="tabLogin" onclick="switchAuthTab('login')" class="flex-1 py-2 text-sm font-bold rounded-lg transition">دخول</button>
+                <button id="tabSignup" onclick="switchAuthTab('signup')" class="flex-1 py-2 text-sm font-bold rounded-lg transition">حساب جديد</button>
+            </div>
+            <form id="loginForm" class="space-y-4" onsubmit="event.preventDefault(); handleLogin();">
+                <input type="email" id="loginEmail" autocomplete="email" placeholder="البريد الإلكتروني" class="field" dir="ltr" required>
+                <input type="password" id="loginPassword" autocomplete="current-password" placeholder="كلمة المرور" class="field" dir="ltr" required>
+                <button id="loginBtn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">تسجيل الدخول</button>
+                <button type="button" onclick="handleForgotPassword()" class="w-full text-xs text-dynamic-muted hover:underline">نسيت كلمة المرور؟</button>
+            </form>
+            <form id="signupForm" class="space-y-4 hidden" onsubmit="event.preventDefault(); handleSignup();">
+                <input type="text" id="signupUsername" maxlength="50" autocomplete="nickname" placeholder="اسم المستخدم" class="field" required>
+                <input type="email" id="signupEmail" autocomplete="email" placeholder="البريد الإلكتروني" class="field" dir="ltr" required>
+                <input type="password" id="signupPassword" autocomplete="new-password" minlength="6" placeholder="كلمة المرور (6 أحرف على الأقل)" class="field" dir="ltr" required>
+                <button id="signupBtn" type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition shadow-lg">إنشاء حساب</button>
+            </form>
+            <form id="recoveryForm" class="space-y-4 hidden" onsubmit="event.preventDefault(); handleSetNewPassword();">
+                <p class="text-sm text-dynamic-main font-bold">دخل كلمة المرور الجديدة</p>
+                <input type="password" id="recoveryPassword" autocomplete="new-password" minlength="6" placeholder="كلمة المرور الجديدة" class="field" dir="ltr" required>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">حفظ</button>
+            </form>
+            <div id="authMsg" class="mt-4 text-xs font-bold text-center hidden"></div>
+        </div>
+    </div>
+
+    <!-- القائمة الجانبية -->
+    <aside id="desktopSidebar" class="hidden md:flex flex-col w-64 shrink-0 bg-dynamic-sidebar text-gray-400 h-full shadow-2xl relative z-20 transition-colors">
+        <div class="p-6 flex items-center justify-center gap-3 text-white mb-2 border-b border-gray-800 pb-6">
+            <div class="p-2 rounded-xl shadow-lg" style="background-color: var(--primary)">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+            </div>
+            <h1 class="text-xl font-extrabold text-white text-right lib-name-display truncate w-36">مكتبتي</h1>
+        </div>
+        <nav class="flex-1 px-4 space-y-2 font-semibold text-sm mt-4 overflow-y-auto hide-scrollbar">
+            <button onclick="switchView('home')" id="nav-home" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg> الرئيسية</button>
+            <button onclick="switchView('library')" id="nav-library" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg> مكتبتي</button>
+            <button onclick="switchView('community')" id="nav-community" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg> كتب الأصدقاء</button>
+            <button onclick="switchView('explore')" id="nav-explore" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg> رفوف التصنيفات</button>
+            <button onclick="switchView('favorites')" id="nav-favorites" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg> المفضلة</button>
+            <button onclick="switchView('friends')" id="nav-friends" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> الأصدقاء <span class="friends-badge hidden mr-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-2 py-0.5"></span></button>
+            <button onclick="switchView('profile')" id="nav-profile" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg> الملف الشخصي</button>
+        </nav>
+    </aside>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative pb-16 md:pb-0">
+        <header id="mainHeader" class="bg-dynamic-card border-b border-dynamic p-4 md:px-8 flex justify-between items-center z-10 sticky top-0 shadow-sm transition-colors duration-300">
+            <h2 id="headerTitle" class="text-xl md:text-2xl font-extrabold text-dynamic-main hidden md:block">الرئيسية</h2>
+            <div class="md:hidden font-bold text-xl flex items-center gap-2" style="color: var(--primary)">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                <span class="lib-name-display text-dynamic-main">مكتبتي</span>
+            </div>
+            <div class="flex items-center gap-3 md:gap-4">
+                <button onclick="logOutUser()" class="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition" title="خروج"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg></button>
+                <button onclick="openSettingsModal()" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-dynamic-muted transition" title="الإعدادات"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></button>
+                <button onclick="openAddModal()" class="text-white text-sm font-semibold py-2 px-4 rounded-full shadow-md hover:opacity-80 transition flex items-center gap-2" style="background-color: var(--primary)"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden md:inline">رفع كتاب</span></button>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-24" id="mainScrollArea">
+
+            <!-- الرئيسية -->
+            <div id="view-home" class="space-y-8">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-dynamic-card p-4 rounded-2xl shadow-sm border border-dynamic flex items-center justify-between">
+                        <div><p class="text-[10px] md:text-xs text-dynamic-muted mb-1">إجمالي كتبي</p><p class="text-2xl font-bold text-dynamic-main" id="statTotal">0</p></div>
+                        <div class="p-3 rounded-xl bg-blue-50 text-blue-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg></div>
+                    </div>
+                    <div class="bg-dynamic-card p-4 rounded-2xl shadow-sm border border-dynamic flex items-center justify-between">
+                        <div><p class="text-[10px] md:text-xs text-dynamic-muted mb-1">الكتب المكتملة</p><p class="text-2xl font-bold text-dynamic-main" id="statRead">0</p></div>
+                        <div class="p-3 rounded-xl bg-green-50 text-green-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                    </div>
+                    <div class="bg-dynamic-card p-4 rounded-2xl shadow-sm border border-dynamic flex items-center justify-between">
+                        <div><p class="text-[10px] md:text-xs text-dynamic-muted mb-1">قيد القراءة</p><p class="text-2xl font-bold text-dynamic-main" id="statReading">0</p></div>
+                        <div class="p-3 rounded-xl bg-yellow-50 text-yellow-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                    </div>
+                    <div class="bg-dynamic-card p-4 rounded-2xl shadow-sm border border-dynamic flex items-center justify-between cursor-pointer" onclick="switchView('friends')">
+                        <div><p class="text-[10px] md:text-xs text-dynamic-muted mb-1">عدد الأصدقاء</p><p class="text-2xl font-bold text-dynamic-main" id="statFriends">0</p></div>
+                        <div class="p-3 rounded-xl bg-purple-50 text-purple-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+                    </div>
+                </div>
+
+                <div class="relative rounded-3xl overflow-hidden shadow-lg h-48 md:h-64 flex items-center bg-gray-900">
+                    <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center opacity-40 mix-blend-overlay"></div>
+                    <div class="relative z-10 px-8 md:px-12 w-full md:w-2/3">
+                        <h2 class="text-3xl md:text-5xl font-extrabold text-white mb-3">اقرأ .. شارك .. تطوَّر</h2>
+                        <p class="text-gray-200 text-sm md:text-base mb-6 opacity-90">كتبك محفوظة أونلاين، تلقاها من أي جهاز وتشاركها مع أصدقائك.</p>
+                        <button onclick="openAddModal()" class="text-white font-bold py-2.5 px-6 rounded-full text-sm shadow-lg hover:opacity-80 transition" style="background-color: var(--primary)">رفع كتاب جديد</button>
+                    </div>
+                </div>
+
+                <div id="homeContinueWrap" class="hidden">
+                    <h3 class="text-xl font-bold text-dynamic-main mb-4 border-b border-dynamic pb-2">كمل القراءة</h3>
+                    <div id="homeContinueGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6"></div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-dynamic-main mb-4 border-b border-dynamic pb-2">أحدث إضافاتي</h3>
+                    <div id="homeRecentGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6"></div>
+                    <p id="homeRecentEmpty" class="hidden text-dynamic-muted text-sm py-6 text-center">مازال ما رفعتي حتى كتاب. ورك على "رفع كتاب" باش تبدا.</p>
+                </div>
+            </div>
+
+            <!-- مكتبتي -->
+            <div id="view-library" class="hidden space-y-6">
+                <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+                    <div class="flex gap-2 overflow-x-auto hide-scrollbar" id="libraryFilters">
+                        <button class="chip active" data-filter="all" onclick="setLibraryFilter('all')">الكل</button>
+                        <button class="chip" data-filter="reading" onclick="setLibraryFilter('reading')">قيد القراءة</button>
+                        <button class="chip" data-filter="read" onclick="setLibraryFilter('read')">مكتملة</button>
+                        <button class="chip" data-filter="mine" onclick="setLibraryFilter('mine')">رفعتهم أنا</button>
+                        <button class="chip" data-filter="friends" onclick="setLibraryFilter('friends')">من الأصدقاء</button>
+                    </div>
+                    <input type="search" id="librarySearch" oninput="renderLibrary()" placeholder="ابحث ف مكتبتي..." class="field md:max-w-xs">
+                </div>
+                <div id="libraryGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6"></div>
+                <div id="libraryEmpty" class="hidden flex-col items-center justify-center py-20 gap-4">
+                    <p class="text-lg font-bold text-dynamic-muted">ما كاين حتى كتاب هنا</p>
+                    <button onclick="openAddModal()" class="text-white font-bold py-2.5 px-6 rounded-full text-sm shadow-lg hover:opacity-80 transition" style="background-color: var(--primary)">رفع كتاب</button>
+                </div>
+            </div>
+
+            <!-- كتب الأصدقاء والمجتمع -->
+            <div id="view-community" class="hidden space-y-6">
+                <div class="flex flex-col md:flex-row gap-3">
+                    <input type="search" id="searchCommunity" oninput="renderCommunity()" placeholder="ابحث بالعنوان، الكاتب، ولا شكون رفعو..." class="field flex-1">
+                    <select id="communityCategory" onchange="renderCommunity()" class="field md:max-w-xs"></select>
+                </div>
+                <div id="communityGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6"></div>
+                <div id="communityEmpty" class="hidden text-center py-16 text-dynamic-muted space-y-3">
+                    <p class="font-bold text-lg">ما كاين حتى كتاب من عند الأصدقاء</p>
+                    <p class="text-sm">زيد أصدقاء بالكود ديالهم، وغادي تبان هنا الكتب اللي شاركو معاك.</p>
+                    <button onclick="switchView('friends')" class="text-white font-bold py-2 px-5 rounded-full text-sm" style="background-color: var(--primary)">زيد صديق</button>
+                </div>
+            </div>
+
+            <!-- رفوف التصنيفات -->
+            <div id="view-explore" class="hidden space-y-8">
+                <div class="relative max-w-2xl mx-auto">
+                    <input type="search" id="searchInput" oninput="renderExplore()" placeholder="ابحث باسم الكتاب أو اسم الكاتب..." class="field text-lg pr-12">
+                    <svg class="w-6 h-6 text-dynamic-muted absolute right-4 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <div id="exploreShelves" class="space-y-20 pt-8"></div>
+                <div id="exploreEmpty" class="hidden text-center py-10 text-dynamic-muted font-bold">لا يوجد كتاب...</div>
+            </div>
+
+            <!-- المفضلة -->
+            <div id="view-favorites" class="hidden space-y-6">
+                <div id="favoritesGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6"></div>
+                <div id="favoritesEmpty" class="hidden flex-col items-center justify-center py-20 opacity-60"><p class="text-lg font-bold text-dynamic-main">لا توجد كتب في المفضلة</p><p class="text-sm text-dynamic-muted mt-2">ورك على ❤️ ف أي كتاب باش تزيدو هنا</p></div>
+            </div>
+
+            <!-- الأصدقاء -->
+            <div id="view-friends" class="hidden space-y-8 max-w-4xl mx-auto">
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="bg-dynamic-card p-6 rounded-3xl shadow-sm border border-dynamic">
+                        <h3 class="text-lg font-bold text-dynamic-main mb-2">زيد صديق</h3>
+                        <p class="text-xs text-dynamic-muted mb-4">دخل كود الصداقة ديال صاحبك (6 حروف/أرقام). غادي يوصلو طلب ويقبلو.</p>
+                        <form class="flex gap-2" onsubmit="event.preventDefault(); sendFriendRequest();">
+                            <input type="text" id="friendSearchCode" placeholder="A1B2C3" class="field flex-1 uppercase text-center font-bold tracking-widest" maxlength="6" dir="ltr" autocomplete="off">
+                            <button id="friendReqBtn" type="submit" class="text-white font-bold py-3 px-5 rounded-xl transition shadow-md whitespace-nowrap" style="background-color: var(--primary)">صيفط طلب</button>
+                        </form>
+                    </div>
+                    <div class="bg-dynamic-card p-6 rounded-3xl shadow-sm border border-dynamic flex flex-col items-center justify-center text-center cursor-pointer hover:opacity-90 transition" onclick="copyCode()" title="ورك باش تنسخ">
+                        <span class="text-xs text-dynamic-muted font-bold mb-2">الكود ديالك، عطيه لصحابك</span>
+                        <span class="friend-code-display text-3xl font-extrabold tracking-[0.3em] font-mono" style="color: var(--primary)" dir="ltr">------</span>
+                        <span class="text-[11px] text-dynamic-muted mt-2">📋 ورك باش تنسخ</span>
+                    </div>
+                </div>
+
+                <div id="incomingWrap" class="hidden">
+                    <h3 class="text-xl font-bold text-dynamic-main mb-4 border-b border-dynamic pb-2">طلبات الصداقة <span id="incomingCount" class="text-sm text-red-500"></span></h3>
+                    <div id="incomingList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-bold text-dynamic-main mb-4 border-b border-dynamic pb-2">أصدقائي</h3>
+                    <div id="friendsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                    <p id="friendsEmpty" class="hidden text-dynamic-muted text-sm text-center py-8">مازال ما عندك حتى صديق. صيفط الكود ديالك لصحابك!</p>
+                </div>
+
+                <div id="outgoingWrap" class="hidden">
+                    <h3 class="text-base font-bold text-dynamic-muted mb-3">طلبات صيفطتيها (كتسنى القبول)</h3>
+                    <div id="outgoingList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                </div>
+            </div>
+
+            <!-- الملف الشخصي -->
+            <div id="view-profile" class="hidden space-y-8 max-w-3xl mx-auto">
+                <div class="bg-dynamic-card p-8 rounded-3xl shadow-sm border border-dynamic text-center relative overflow-hidden">
+                    <div class="w-full h-32 absolute top-0 left-0 opacity-80" style="background: linear-gradient(to right, var(--primary), #8b5cf6)"></div>
+                    <div class="relative z-10 mt-12">
+                        <label class="cursor-pointer inline-block relative group">
+                            <div class="w-32 h-32 mx-auto rounded-full bg-white dark:bg-gray-800 border-4 border-white dark:border-gray-800 shadow-lg overflow-hidden flex items-center justify-center text-5xl">
+                                <img id="profileAvatar" src="" alt="" class="w-full h-full object-cover hidden">
+                                <span id="profileAvatarPlaceholder" class="text-gray-300">👤</span>
+                            </div>
+                            <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="text-white text-xs font-bold">تغيير الصورة</span>
+                            </div>
+                            <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="uploadAvatar(this)">
+                        </label>
+                        <h2 class="text-2xl font-bold text-dynamic-main mt-4" id="profileNameDisplay">اسم المستخدم</h2>
+                        <p class="text-dynamic-muted text-sm mb-4" id="profileEmailDisplay" dir="ltr"></p>
+                        <div class="inline-flex flex-col items-center bg-[var(--app-bg)] p-3 rounded-xl border border-dynamic mb-6 cursor-pointer hover:opacity-80 transition" onclick="copyCode()" title="ورك باش تنسخ">
+                            <span class="text-xs text-dynamic-muted font-bold mb-1">كود الصداقة ديالك</span>
+                            <span class="friend-code-display text-xl font-extrabold tracking-widest font-mono" style="color: var(--primary)" dir="ltr">------</span>
+                        </div>
+                        <div class="space-y-4 text-right">
+                            <div><label class="block text-sm font-bold text-dynamic-main mb-1">البايو (Bio)</label><textarea id="profileBioInput" maxlength="500" class="field resize-none" rows="2"></textarea></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="block text-sm font-bold text-dynamic-main mb-1">اسم المستخدم</label><input type="text" id="profileUsernameInput" maxlength="50" class="field"></div>
+                                <div><label class="block text-sm font-bold text-dynamic-main mb-1">كلمة مرور جديدة (اختياري)</label><input type="password" id="profilePasswordInput" autocomplete="new-password" minlength="6" placeholder="خليها خاوية إلا ما بغيتيش تبدلها" class="field" dir="ltr"></div>
+                            </div>
+                            <button id="saveProfileBtn" onclick="saveProfile()" class="text-white font-bold py-3 px-6 rounded-xl transition shadow-lg w-full mt-4 hover:opacity-80" style="background-color: var(--primary)">حفظ التغييرات</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- قارئ الـ PDF -->
+            <div id="view-reader" class="hidden h-full flex-col bg-gray-900 rounded-3xl overflow-hidden shadow-2xl relative">
+                <div class="bg-gray-800 text-white p-3 md:p-4 flex justify-between items-center gap-2 z-10 shadow-md">
+                    <button onclick="closeReader()" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> <span class="hidden md:inline">إغلاق</span>
+                    </button>
+                    <span id="readerTitle" class="font-bold text-center flex-1 truncate px-2">عنوان الكتاب</span>
+                    <div class="flex items-center gap-1 bg-gray-700 px-2 py-1.5 rounded-lg text-sm" dir="ltr">
+                        <button onclick="zoomReader(-0.2)" class="hover:text-blue-400 px-1 font-bold" title="تصغير">−</button>
+                        <button onclick="zoomReader(0.2)" class="hover:text-blue-400 px-1 font-bold" title="تكبير">+</button>
+                        <span class="w-px h-5 bg-gray-500 mx-1"></span>
+                        <button onclick="prevPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
+                        <input type="number" id="page_num_input" onchange="goToPage(this.value)" class="w-12 text-center bg-gray-600 text-white font-bold rounded outline-none focus:ring-2 focus:ring-blue-500" value="1">
+                        <span>/ <span id="page_count">?</span></span>
+                        <button onclick="nextPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto flex justify-center items-start p-4 bg-gray-900 relative" id="canvasContainer">
+                    <div id="readerLoading" class="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-300 text-sm font-bold"><div class="spinner"></div><span id="readerLoadingText">جاري تحميل الكتاب...</span></div>
+                    <canvas id="pdf-render" class="shadow-2xl max-w-full h-auto bg-white"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- شريط الموبايل -->
+    <nav id="mobileNav" class="md:hidden fixed bottom-0 w-full bg-dynamic-card border-t border-dynamic flex justify-around items-center h-16 z-50 pb-2 shadow-[0_-5px_10px_rgba(0,0,0,0.05)] transition-colors duration-300">
+        <button onclick="switchView('home')" id="mob-home" class="mob-item"><svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg><span class="text-[9px] font-bold">الرئيسية</span></button>
+        <button onclick="switchView('library')" id="mob-library" class="mob-item"><svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg><span class="text-[9px] font-bold">مكتبتي</span></button>
+        <button onclick="switchView('community')" id="mob-community" class="mob-item"><svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg><span class="text-[9px] font-bold">الأصدقاء</span></button>
+        <button onclick="switchView('explore')" id="mob-explore" class="mob-item"><svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg><span class="text-[9px] font-bold">الرفوف</span></button>
+        <button onclick="switchView('friends')" id="mob-friends" class="mob-item relative"><svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span class="text-[9px] font-bold">صحابي</span><span class="friends-badge hidden absolute top-1 right-3 bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5"></span></button>
+        <button onclick="switchView('profile')" id="mob-profile" class="mob-item"><svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg><span class="text-[9px] font-bold">حسابي</span></button>
+    </nav>
+
+    <!-- Modal: رفع كتاب -->
+    <div id="addModal" class="modal fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-dynamic-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-dynamic">
+            <div class="px-6 py-4 border-b border-dynamic flex justify-between items-center bg-black/5">
+                <h3 class="text-xl font-bold text-dynamic-main">رفع كتاب جديد</h3>
+                <button onclick="closeModal('addModal')" class="text-dynamic-muted hover:text-red-500 transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto hide-scrollbar">
+                <div>
+                    <label class="block text-sm font-bold text-dynamic-main mb-1">ملف الـ PDF <span class="text-dynamic-muted font-normal">(حتى 50MB، كيتحفظ أونلاين ☁️)</span></label>
+                    <input type="file" id="pdfFile" accept="application/pdf,.pdf" onchange="onPdfPicked(this)" class="field text-sm">
+                </div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">عنوان الكتاب</label><input type="text" id="bookTitle" maxlength="200" class="field"></div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">اسم المؤلف</label><input type="text" id="bookAuthor" maxlength="200" class="field"></div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">التصنيف</label><select id="bookCategory" class="field category-select"></select></div>
+                <div>
+                    <label class="block text-sm font-bold text-dynamic-main mb-1">شكون يقدر يشوفو؟</label>
+                    <select id="bookVisibility" class="field visibility-select"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-dynamic-main mb-1">غلاف مخصص <span class="text-dynamic-muted font-normal">(اختياري، وإلا ناخدو الصفحة الأولى)</span></label>
+                    <input type="file" id="customCoverFile" accept="image/*" class="field text-sm">
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-dynamic flex gap-3 bg-black/5">
+                <button id="addBtn" onclick="addBook()" class="flex-1 text-white font-bold py-3 rounded-xl transition shadow-lg hover:opacity-80 disabled:opacity-60" style="background-color: var(--primary)">رفع وحفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: تفاصيل كتاب -->
+    <div id="bookDetailsModal" class="modal fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-dynamic-card w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-dynamic flex flex-col md:flex-row max-h-[90vh]">
+            <div class="md:w-2/5 bg-black/5 p-6 border-b md:border-b-0 md:border-l border-dynamic flex flex-col items-center">
+                <img id="detailCover" src="" alt="" class="w-32 h-48 object-cover rounded-xl shadow-md mb-4 bg-gray-200">
+                <h3 id="detailTitle" class="text-lg font-bold text-dynamic-main text-center leading-tight mb-1 book-title-font"></h3>
+                <p id="detailAuthor" class="text-sm text-dynamic-muted text-center mb-3"></p>
+                <div id="detailMeta" class="flex flex-wrap gap-2 justify-center mb-4"></div>
+                <div id="detailActions" class="w-full space-y-2"></div>
+                <button onclick="closeModal('bookDetailsModal')" class="w-full bg-gray-200 dark:bg-gray-700 text-dynamic-main text-xs font-bold py-2 rounded-xl transition mt-3">إغلاق</button>
+            </div>
+            <div class="md:w-3/5 flex flex-col min-h-[16rem]">
+                <div class="p-4 border-b border-dynamic"><h4 class="font-bold text-dynamic-main">آراء وتقييمات</h4></div>
+                <div class="flex-1 flex items-center justify-center p-8 text-center text-dynamic-muted text-sm">⭐ التقييمات والمراجعات غادي يتزادو ف المرحلة الجاية</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: التعديل -->
+    <div id="editModal" class="modal fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-dynamic-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-dynamic">
+            <div class="px-6 py-4 border-b border-dynamic flex justify-between items-center bg-black/5"><h3 class="text-xl font-bold text-dynamic-main">تعديل الكتاب</h3><button onclick="closeModal('editModal')" class="text-dynamic-muted hover:text-red-500 transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>
+            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto hide-scrollbar">
+                <input type="hidden" id="editBookId">
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">عنوان الكتاب</label><input type="text" id="editBookTitle" maxlength="200" class="field"></div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">اسم المؤلف</label><input type="text" id="editBookAuthor" maxlength="200" class="field"></div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">التصنيف</label><select id="editBookCategory" class="field category-select"></select></div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">شكون يقدر يشوفو؟</label><select id="editBookVisibility" class="field visibility-select"></select></div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">تغيير الغلاف (اختياري)</label><input type="file" id="editCustomCover" accept="image/*" class="field text-sm"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-dynamic flex gap-3 bg-black/5"><button id="editSaveBtn" onclick="saveEditBook()" class="flex-1 text-white font-bold py-3 rounded-xl transition shadow-lg hover:opacity-80" style="background-color: var(--primary)">حفظ التعديلات</button></div>
+        </div>
+    </div>
+
+    <!-- Modal: المذكرات -->
+    <div id="notesModal" class="modal fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-dynamic-card w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-dynamic">
+            <div class="px-6 py-4 border-b border-dynamic flex justify-between items-center bg-yellow-50 dark:bg-yellow-900/30"><h3 class="text-xl font-bold text-yellow-800 dark:text-yellow-500">مذكرة الاقتباسات <span class="text-xs font-normal">(خاصة بيك)</span></h3><button onclick="closeModal('notesModal')" class="text-yellow-800 dark:text-yellow-500 hover:text-red-500 transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>
+            <div class="p-6"><input type="hidden" id="notesBookId"><textarea id="bookNotesArea" maxlength="20000" class="field h-48 resize-none leading-relaxed" placeholder="سجل هنا اقتباساتك وملاحظاتك..."></textarea></div>
+            <div class="px-6 py-4 border-t border-dynamic flex gap-3 bg-black/5"><button onclick="saveNotes()" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-xl transition shadow-lg">حفظ المذكرة</button></div>
+        </div>
+    </div>
+
+    <!-- Modal: الإعدادات -->
+    <div id="settingsModal" class="modal fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-dynamic-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-dynamic">
+            <div class="px-6 py-4 border-b border-dynamic flex justify-between items-center bg-black/5">
+                <h3 class="text-xl font-bold text-dynamic-main">إعدادات التطبيق</h3>
+                <button onclick="closeModal('settingsModal')" class="text-dynamic-muted hover:text-red-500 transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            <div class="p-6 space-y-5 max-h-[60vh] overflow-y-auto hide-scrollbar">
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">اسم المكتبة <span class="text-dynamic-muted font-normal">(خليه خاوي باش يكون "مكتبة + اسمك")</span></label><input type="text" id="setLibName" maxlength="40" class="field"></div>
+                <div>
+                    <label class="block text-sm font-bold text-dynamic-main mb-2">المظهر</label>
+                    <div class="flex gap-4">
+                        <label class="flex-1 cursor-pointer flex items-center gap-2 p-3 rounded-xl border border-dynamic bg-[var(--app-bg)]"><input type="radio" name="setTheme" value="light" class="w-4 h-4"> <span class="text-dynamic-main text-sm font-semibold">فاتح ☀️</span></label>
+                        <label class="flex-1 cursor-pointer flex items-center gap-2 p-3 rounded-xl border border-dynamic bg-[var(--app-bg)]"><input type="radio" name="setTheme" value="dark" class="w-4 h-4"> <span class="text-dynamic-main text-sm font-semibold">مظلم 🌙</span></label>
+                    </div>
+                </div>
+                <div><label class="block text-sm font-bold text-dynamic-main mb-1">اللون الأساسي</label><input type="color" id="setPrimaryColor" class="w-full h-12 rounded-xl cursor-pointer border-none bg-transparent"></div>
+                <div>
+                    <label class="block text-sm font-bold text-dynamic-main mb-2">خلفية التطبيق</label>
+                    <div class="grid grid-cols-4 gap-2">
+                        <label class="cursor-pointer"><input type="radio" name="setBgTexture" value="none" class="hidden texture-radio"><div class="h-12 rounded-lg border-2 border-transparent bg-gray-200 dark:bg-gray-700 transition"></div><div class="text-[10px] text-center mt-1 text-dynamic-muted">سادة</div></label>
+                        <label class="cursor-pointer"><input type="radio" name="setBgTexture" value="paper" class="hidden texture-radio"><div class="h-12 rounded-lg border-2 border-transparent bg-[#fcf8f2] bg-[url('https://www.transparenttextures.com/patterns/cream-paper.png')] transition"></div><div class="text-[10px] text-center mt-1 text-dynamic-muted">ورق</div></label>
+                        <label class="cursor-pointer"><input type="radio" name="setBgTexture" value="dots" class="hidden texture-radio"><div class="h-12 rounded-lg border-2 border-transparent bg-gray-100 dark:bg-gray-800 bg-[url('https://www.transparenttextures.com/patterns/subtle-dots.png')] transition"></div><div class="text-[10px] text-center mt-1 text-dynamic-muted">نقاط</div></label>
+                        <label class="cursor-pointer"><input type="radio" name="setBgTexture" value="stardust" class="hidden texture-radio"><div class="h-12 rounded-lg border-2 border-transparent bg-gray-900 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] transition"></div><div class="text-[10px] text-center mt-1 text-dynamic-muted">نجوم</div></label>
+                    </div>
+                </div>
+                <div class="border-t border-dynamic pt-4">
+                    <button onclick="clearPdfCache()" class="w-full text-sm font-bold py-2 rounded-xl border border-dynamic text-dynamic-muted hover:text-red-500 transition">مسح الكتب المحفوظة ف هاد الجهاز (الكاش)</button>
+                    <p class="text-[11px] text-dynamic-muted mt-1 text-center">الكتب كتبقى أونلاين، غير غادي تتحمل من جديد ملي تحلها.</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-dynamic flex gap-3 bg-black/5">
+                <button onclick="saveSettings()" class="flex-1 text-white font-bold py-3 rounded-xl transition shadow-lg hover:opacity-80" style="background-color: var(--primary)">حفظ التغييرات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- إشعارات صغيرة -->
+    <div id="toastHost" class="fixed top-4 left-1/2 -translate-x-1/2 z-[400] flex flex-col gap-2 items-center pointer-events-none w-[90%] max-w-sm"></div>
+
+    <script>
+        // =====================================================================
+        // 1. الإعدادات
+        // =====================================================================
+        const SUPABASE_URL = 'https://llbteabsfoqyeqyqmvmh.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_VnCv1yarsAA7KxNU1JeKgQ_z3DvjkL-';   // مفتاح عمومي، عادي يكون هنا. الحماية كاينة ف supabase/schema.sql
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const MAX_PDF_BYTES = 50 * 1024 * 1024;
+        const MAX_PDF_CACHE = 10;
+        const defaultCover = 'https://placehold.co/300x450/e2e8f0/475569?text=Cover&font=cairo';
+        const CATEGORIES = ['دروس','روايات عربية','روايات أجنبية','كتب الأدب','كتب تاريخية','كتب دينية','كتب سياسية','كتب علمية','مال وأعمال','علم النفس وتطوير الذات','السيرة الذاتية والمذكرات','فلسفة','لغات','قانون','تكنولوجيا وإنترنت','الصحافة والإعلام','الطب والصحة','الأسرة والطفل','الرياضة والتسلية','فنون','كتب أطفال','السفر والترحال','ميثولوجيا وأساطير','مراجع وأبحاث','الفكر والثقافة','العلوم الاجتماعية والمجتمع','التربية والتعليم','الجغرافيا والبيئة','الهندسة','الطبخ والطعام'];
+        const VISIBILITY = {
+            private: { label: 'خاص (غير أنا)', icon: '🔒' },
+            friends: { label: 'الأصدقاء', icon: '👥' },
+            public:  { label: 'الجميع', icon: '🌍' },
+        };
+        const bookColors = ['bg-[#8B0000]', 'bg-[#191970]', 'bg-[#006400]', 'bg-[#4B0082]', 'bg-[#8B4513]', 'bg-[#2F4F4F]', 'bg-[#b71c1c]'];
+        const bgTextures = { none: 'none', paper: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")', dots: 'url("https://www.transparenttextures.com/patterns/subtle-dots.png")', stardust: 'url("https://www.transparenttextures.com/patterns/stardust.png")' };
+        let appSettings = { libraryName: '', theme: 'dark', primaryColor: '#3b82f6', bgTexture: 'none' };
+
+        const views = ['home', 'library', 'community', 'explore', 'favorites', 'friends', 'profile', 'reader'];
+        const viewTitles = { home: 'الرئيسية', library: 'مكتبتي', community: 'كتب الأصدقاء', explore: 'رفوف التصنيفات', favorites: 'المفضلة', friends: 'الأصدقاء', profile: 'حسابي' };
+
+        // =====================================================================
+        // 2. الحالة
+        // =====================================================================
+        let me = null;              // المستخدم المسجل
+        let myProfile = null;       // الـ profile ديالو
+        let library = [];           // الكتب ف مكتبتي: { ...book, owner, st: book_state }
+        let communityBooks = [];    // كتب الآخرين اللي نقدر نشوفها
+        let friends = [];           // [{ friendshipId, profile }]
+        let incoming = [];          // طلبات جاتني
+        let outgoing = [];          // طلبات صيفطتها
+        let libraryFilter = 'all';
+        let currentView = 'home';
+        let realtimeChannel = null;
+
+        // =====================================================================
+        // 3. أدوات
+        // =====================================================================
+        // يحمي من XSS: كل نص جاي من المستخدمين خاصو يدوز من هنا قبل ما يتحط فـ innerHTML
+        function escapeHtml(v) { return String(v ?? '').replace(/[&<>"'`]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[ch])); }
+        function publicImageUrl(path) { return path ? `${SUPABASE_URL}/storage/v1/object/public/images/${path.split('/').map(encodeURIComponent).join('/')}` : ''; }
+        function coverUrl(book) { return book && book.cover_path ? publicImageUrl(book.cover_path) : defaultCover; }
+        function avatarHtml(profile, size = 'w-12 h-12', text = 'text-xl') {
+            if (profile && profile.avatar_path) return `<img src="${escapeHtml(publicImageUrl(profile.avatar_path))}" alt="" class="${size} rounded-full object-cover shrink-0">`;
+            const letter = (profile && profile.username ? profile.username.trim()[0] : '؟') || '؟';
+            return `<div class="${size} rounded-full shrink-0 flex items-center justify-center ${text} font-bold text-white" style="background-color: var(--primary)">${escapeHtml(letter.toUpperCase())}</div>`;
+        }
+        function formatMB(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + 'MB'; }
+        function isOwner(book) { return !!(me && book && book.owner_id === me.id); }
+
+        function toast(message, type = 'info') {
+            const colors = { info: 'bg-gray-900 text-white', success: 'bg-green-600 text-white', error: 'bg-red-600 text-white' };
+            const el = document.createElement('div');
+            el.className = `pointer-events-auto msg-anim px-4 py-3 rounded-xl shadow-2xl text-sm font-bold text-center ${colors[type] || colors.info}`;
+            el.textContent = message;
+            document.getElementById('toastHost').appendChild(el);
+            setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, type === 'error' ? 5000 : 3000);
+        }
+
+        // كنترجمو الأخطاء الشائعة لرسائل مفهومة
+        function errMsg(e) {
+            const m = String((e && (e.message || e.error_description || e.error)) || e || '');
+            const map = [
+                [/Invalid login credentials/i, 'الإيميل ولا كلمة المرور غالطين'],
+                [/Email not confirmed/i, 'خاصك تأكد الإيميل ديالك أولا (شوف البريد ديالك)'],
+                [/User already registered|already been registered/i, 'هاد الإيميل عندو حساب من قبل'],
+                [/Password should be at least/i, 'كلمة المرور خاصها تكون 6 أحرف على الأقل'],
+                [/rate limit|too many/i, 'بزاف ديال المحاولات، تسنى شوية وعاود'],
+                [/exceeded the maximum allowed size|Payload too large|413/i, 'الملف كبير بزاف'],
+                [/mime type|invalid_mime/i, 'نوع الملف ما مقبولش'],
+                [/Failed to fetch|NetworkError|network/i, 'مشكل ف الأنترنت، تأكد من الاتصال'],
+                [/row-level security|permission denied|violates/i, 'ما عندكش الصلاحية تدير هادشي'],
+                [/New password should be different/i, 'كلمة المرور الجديدة خاصها تكون مختلفة'],
+            ];
+            for (const [re, txt] of map) if (re.test(m)) return txt;
+            return m || 'وقع شي خطأ، عاود جرب';
+        }
+
+        function setBusy(btn, busy, text) {
+            if (!btn) return;
+            if (busy) { btn.dataset.orig = btn.innerHTML; btn.disabled = true; btn.textContent = text || '...'; }
+            else { btn.disabled = false; if (btn.dataset.orig) btn.innerHTML = btn.dataset.orig; }
+        }
+
+        // تصغير الصورة قبل الرفع (أسرع وكياخد بلاصة قليلة)
+        function resizeImage(fileOrBlob, maxW, quality = 0.85) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(fileOrBlob);
+                const img = new Image();
+                img.onload = () => {
+                    const scale = Math.min(1, maxW / img.width);
+                    const c = document.createElement('canvas');
+                    c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+                    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                    URL.revokeObjectURL(url);
+                    c.toBlob(b => b ? resolve(b) : reject(new Error('image')), 'image/jpeg', quality);
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('الصورة ما تقراتش')); };
+                img.src = url;
+            });
+        }
+
+        // الصفحة الأولى ديال الـ PDF كغلاف + عدد الصفحات
+        async function readPdfInfo(file) {
+            try {
+                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+                const page = await pdf.getPage(1);
+                const base = page.getViewport({ scale: 1 });
+                const viewport = page.getViewport({ scale: Math.min(2, 450 / base.width) });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width; canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.8));
+                const pages = pdf.numPages;
+                pdf.destroy();
+                return { coverBlob: blob, pages };
+            } catch (e) {
+                return { coverBlob: null, pages: 1, broken: true };
+            }
+        }
+
+        // كاش ديال الـ PDF ف الجهاز باش ما يتحملش كل مرة
+        async function getCachedPdf(id) { try { return await localforage.getItem(`pdf_${id}`); } catch (e) { return null; } }
+        async function cachePdf(id, blob) {
+            try {
+                let index = (await localforage.getItem('pdfCacheIndex')) || [];
+                index = [id, ...index.filter(x => x !== id)];
+                await localforage.setItem(`pdf_${id}`, blob);
+                for (const old of index.slice(MAX_PDF_CACHE)) await localforage.removeItem(`pdf_${old}`);
+                await localforage.setItem('pdfCacheIndex', index.slice(0, MAX_PDF_CACHE));
+            } catch (e) { /* التخزين ف المتصفح عامر ولا مسدود: ماشي مشكل */ }
+        }
+        async function uncachePdf(id) { try { await localforage.removeItem(`pdf_${id}`); } catch (e) {} }
+        async function clearPdfCache() {
+            try {
+                const keys = await localforage.keys();
+                for (const k of keys) if (k.startsWith('pdf_') || k === 'pdfCacheIndex') await localforage.removeItem(k);
+                toast('تمسح الكاش ✅', 'success');
+            } catch (e) { toast(errMsg(e), 'error'); }
+        }
+
+        function fillSelects() {
+            const catOpts = CATEGORIES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+            document.querySelectorAll('.category-select').forEach(s => s.innerHTML = catOpts);
+            document.getElementById('communityCategory').innerHTML = `<option value="">كل التصنيفات</option>` + catOpts;
+            const visOpts = Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join('');
+            document.querySelectorAll('.visibility-select').forEach(s => { s.innerHTML = visOpts; s.value = 'friends'; });
+        }
+
+        // =====================================================================
+        // 4. تسجيل الدخول
+        // =====================================================================
+        function showAuthMsg(text, ok = false) {
+            const el = document.getElementById('authMsg');
+            el.textContent = text; el.classList.remove('hidden');
+            el.className = `mt-4 text-xs font-bold text-center ${ok ? 'text-green-500' : 'text-red-500'}`;
+        }
+        function switchAuthTab(tab) {
+            const isLogin = tab === 'login';
+            document.getElementById('authTabs').classList.remove('hidden');
+            document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
+            document.getElementById('signupForm').classList.toggle('hidden', isLogin);
+            document.getElementById('recoveryForm').classList.add('hidden');
+            const on = 'flex-1 py-2 text-sm font-bold rounded-lg bg-white dark:bg-gray-700 shadow-sm transition';
+            const off = 'flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition';
+            document.getElementById('tabLogin').className = isLogin ? on + ' text-blue-600' : off;
+            document.getElementById('tabSignup').className = !isLogin ? on + ' text-green-600' : off;
+            document.getElementById('authMsg').classList.add('hidden');
+        }
+        function appRedirectUrl() { return location.origin + location.pathname; }
+
+        async function handleSignup() {
+            const username = document.getElementById('signupUsername').value.trim();
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            if (!username || !email || password.length < 6) { showAuthMsg('عمر كاع الخانات (كلمة المرور 6 أحرف على الأقل)'); return; }
+            const btn = document.getElementById('signupBtn'); setBusy(btn, true, 'جاري إنشاء الحساب...');
+            try {
+                const { data, error } = await sb.auth.signUp({ email, password, options: { data: { username }, emailRedirectTo: appRedirectUrl() } });
+                if (error) throw error;
+                if (!data.session) {
+                    switchAuthTab('login');
+                    document.getElementById('loginEmail').value = email;
+                    showAuthMsg('✉️ صيفطنا ليك إيميل التأكيد. حلو وورك على الرابط، من بعد دخل من هنا.', true);
+                }
+            } catch (e) { showAuthMsg(errMsg(e)); } finally { setBusy(btn, false); }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            if (!email || !password) return;
+            const btn = document.getElementById('loginBtn'); setBusy(btn, true, 'جاري الدخول...');
+            try {
+                const { error } = await sb.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+            } catch (e) { showAuthMsg(errMsg(e)); } finally { setBusy(btn, false); }
+        }
+
+        async function handleForgotPassword() {
+            const email = document.getElementById('loginEmail').value.trim();
+            if (!email) { showAuthMsg('كتب الإيميل ديالك الفوق، من بعد ورك على "نسيت كلمة المرور"'); return; }
+            try {
+                const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: appRedirectUrl() });
+                if (error) throw error;
+                showAuthMsg('✉️ إلا كان عندك حساب، غادي يوصلك إيميل فيه رابط باش تبدل كلمة المرور.', true);
+            } catch (e) { showAuthMsg(errMsg(e)); }
+        }
+
+        function showRecoveryForm() {
+            showAuthOverlay(true);
+            document.getElementById('authTabs').classList.add('hidden');
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('signupForm').classList.add('hidden');
+            document.getElementById('recoveryForm').classList.remove('hidden');
+        }
+        async function handleSetNewPassword() {
+            const password = document.getElementById('recoveryPassword').value;
+            if (password.length < 6) { showAuthMsg('كلمة المرور خاصها تكون 6 أحرف على الأقل'); return; }
+            const { error } = await sb.auth.updateUser({ password });
+            if (error) { showAuthMsg(errMsg(error)); return; }
+            toast('تبدلات كلمة المرور ✅', 'success');
+            const { data } = await sb.auth.getSession();
+            onSession(data.session);
+        }
+
+        async function logOutUser() { await sb.auth.signOut(); }
+
+        function showAuthOverlay(show) {
+            const o = document.getElementById('authOverlay');
+            o.classList.toggle('hidden', !show); o.classList.toggle('flex', show);
+        }
+
+        let recoveryMode = false;
+        sb.auth.onAuthStateChange((event, session) => {
+            // ما خاصناش نناديو Supabase مباشرة داخل هاد الـ callback
+            setTimeout(() => {
+                document.getElementById('appLoading').classList.add('hidden');
+                if (event === 'PASSWORD_RECOVERY') { recoveryMode = true; showRecoveryForm(); return; }
+                if (recoveryMode && session) return; // كنتسناو كلمة المرور الجديدة
+                onSession(session);
+            }, 0);
+        });
+
+        function onSession(session) {
+            recoveryMode = false;
+            const user = session ? session.user : null;
+            if (user && me && user.id === me.id) { showAuthOverlay(false); return; } // غير تجديد ديال التوكن
+            me = user;
+            if (!user) {
+                myProfile = null; library = []; communityBooks = []; friends = []; incoming = []; outgoing = [];
+                if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+                switchAuthTab('login');
+                showAuthOverlay(true);
+                return;
+            }
+            showAuthOverlay(false);
+            // نمسحو الـ token من الرابط بعد تأكيد الإيميل
+            if (location.hash.includes('access_token') || location.search.includes('code=')) history.replaceState(null, '', appRedirectUrl());
+            switchView('home');
+            loadEverything();
+        }
+
+        // =====================================================================
+        // 5. جلب البيانات
+        // =====================================================================
+        async function loadEverything() {
+            await Promise.all([loadProfile(), loadLibrary(), loadCommunity(), loadFriends()]);
+            renderAll();
+            subscribeRealtime();
+        }
+
+        async function loadProfile() {
+            const { data, error } = await sb.from('profiles').select('*').eq('id', me.id).maybeSingle();
+            if (error) { toast(errMsg(error), 'error'); return; }
+            myProfile = data;
+            renderProfile();
+        }
+
+        // كنحددو الـ foreign key بالسمية حيت كاينين بزاف ديال الطرق بين books و profiles (book_state، reviews...)
+        const BOOK_FIELDS = '*, owner:profiles!books_owner_id_fkey(id, username, avatar_path)';
+
+        async function loadLibrary() {
+            const { data, error } = await sb.from('book_state')
+                .select(`*, book:books!book_state_book_id_fkey(${BOOK_FIELDS})`)
+                .eq('user_id', me.id)
+                .order('added_at', { ascending: false });
+            if (error) { toast(errMsg(error), 'error'); return; }
+            // إلا ولا الكتاب ما بانش (مثلا صاحبو رجعو خاص) كيتحيد
+            library = (data || []).filter(r => r.book).map(r => { const { book, ...st } = r; return { ...book, st }; });
+        }
+
+        async function loadCommunity() {
+            const { data, error } = await sb.from('books')
+                .select(BOOK_FIELDS)
+                .neq('owner_id', me.id)
+                .order('created_at', { ascending: false })
+                .limit(300);
+            if (error) { toast(errMsg(error), 'error'); return; }
+            communityBooks = data || [];
+        }
+
+        async function loadFriends() {
+            const P = 'id, username, bio, avatar_path';
+            const { data, error } = await sb.from('friendships')
+                .select(`id, status, requester_id, addressee_id, created_at, requester:profiles!friendships_requester_id_fkey(${P}), addressee:profiles!friendships_addressee_id_fkey(${P})`)
+                .order('created_at', { ascending: false });
+            if (error) { toast(errMsg(error), 'error'); return; }
+            friends = []; incoming = []; outgoing = [];
+            for (const f of data || []) {
+                const other = f.requester_id === me.id ? f.addressee : f.requester;
+                const item = { friendshipId: f.id, profile: other || { id: null, username: 'مستخدم' } };
+                if (f.status === 'accepted') friends.push(item);
+                else if (f.addressee_id === me.id) incoming.push(item);
+                else outgoing.push(item);
+            }
+        }
+
+        // تحديث مباشر: طلبات الصداقة كتبان بلا ما تعاود تحل الصفحة
+        function subscribeRealtime() {
+            if (realtimeChannel) sb.removeChannel(realtimeChannel);
+            let timer = null;
+            realtimeChannel = sb.channel('mk-friendships')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+                    clearTimeout(timer);
+                    timer = setTimeout(async () => { await Promise.all([loadFriends(), loadCommunity()]); renderAll(); }, 300);
+                })
+                .subscribe();
+        }
+
+        // =====================================================================
+        // 6. العرض
+        // =====================================================================
+        function renderAll() {
+            renderStats(); renderHome(); renderLibrary(); renderFavorites(); renderCommunity(); renderExplore(); renderFriends(); renderLibName();
+        }
+
+        function renderStats() {
+            document.getElementById('statTotal').innerText = library.length;
+            document.getElementById('statRead').innerText = library.filter(b => b.st.is_read).length;
+            document.getElementById('statReading').innerText = library.filter(b => b.st.progress > 0 && !b.st.is_read).length;
+            document.getElementById('statFriends').innerText = friends.length;
+            document.querySelectorAll('.friends-badge').forEach(el => { el.textContent = incoming.length; el.classList.toggle('hidden', incoming.length === 0); });
+        }
+
+        function renderLibName() {
+            const name = appSettings.libraryName || (myProfile ? `مكتبة ${myProfile.username}` : 'مكتبتي');
+            document.querySelectorAll('.lib-name-display').forEach(el => el.innerText = name);
+            document.getElementById('pageTitle').innerText = `${name} - عالم من المعرفة`;
+        }
+
+        const ICONS = {
+            edit: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>',
+            notes: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>',
+            trash: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>',
+            heart: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>',
+            check: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>',
+        };
+        const svg = (name, cls = 'w-4 h-4', fill = 'none') => `<svg class="${cls}" fill="${fill}" stroke="currentColor" viewBox="0 0 24 24">${ICONS[name]}</svg>`;
+
+        // كارط ديال كتاب ف مكتبتي
+        function libraryCard(book) {
+            const st = book.st;
+            const owner = isOwner(book);
+            const vis = VISIBILITY[book.visibility] || VISIBILITY.friends;
+            const fromBadge = owner
+                ? `<span class="absolute bottom-2 right-2 z-20 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full" title="${escapeHtml(vis.label)}">${vis.icon}</span>`
+                : `<span class="absolute bottom-2 right-2 left-2 z-20 bg-blue-600/90 text-white text-[10px] px-2 py-0.5 rounded-full truncate text-center">من: ${escapeHtml(book.owner ? book.owner.username : 'صديق')}</span>`;
+            const isNew = !st.is_read && st.progress === 0;
+            return `
+                <div class="bg-dynamic-card rounded-2xl p-3 shadow-sm hover:shadow-xl transition-all border border-dynamic flex flex-col relative mt-2 group">
+                    ${isNew ? `<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] font-extrabold px-3 py-0.5 rounded-full shadow-lg z-30 border-2 border-white">جديد</div>` : ''}
+                    <div class="absolute top-3 left-3 flex gap-1.5 z-20 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                        ${owner ? `<button onclick="event.stopPropagation(); openEditModal('${book.id}')" title="تعديل" class="bg-blue-100 p-1.5 rounded-full text-blue-600 shadow-md hover:scale-110 transition">${svg('edit')}</button>` : ''}
+                        <button onclick="event.stopPropagation(); openNotesModal('${book.id}')" title="ملاحظات" class="bg-yellow-100 p-1.5 rounded-full text-yellow-600 shadow-md hover:scale-110 transition">${svg('notes')}</button>
+                        <button onclick="event.stopPropagation(); deleteBook('${book.id}')" title="${owner ? 'مسح الكتاب' : 'حيد من مكتبتي'}" class="bg-red-100 p-1.5 rounded-full text-red-600 shadow-md hover:scale-110 transition">${svg('trash')}</button>
+                    </div>
+                    <button onclick="event.stopPropagation(); toggleFav('${book.id}')" title="المفضلة" class="absolute top-3 right-3 z-20 ${st.is_favorite ? 'text-red-500' : 'text-gray-300 hover:text-red-400'} bg-white/90 dark:bg-gray-800/90 p-1.5 rounded-full shadow-md transition hover:scale-110">${svg('heart', 'w-5 h-5', st.is_favorite ? 'currentColor' : 'none')}</button>
+                    <button onclick="event.stopPropagation(); toggleRead('${book.id}')" title="مكتمل" class="absolute top-12 right-3 z-20 ${st.is_read ? 'text-green-500 bg-green-50' : 'text-gray-300 bg-white/90 hover:text-green-500'} p-1.5 rounded-full shadow-md transition hover:scale-110">${svg('check', 'w-5 h-5')}</button>
+                    <div class="relative w-full aspect-[2/3] rounded-xl overflow-hidden mb-3 bg-gray-200 dark:bg-gray-700 cursor-pointer" onclick="openReader('${book.id}')">
+                        <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"><span class="bg-white/90 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full">📖 اقرأ</span></div>
+                        <img src="${escapeHtml(coverUrl(book))}" alt="" loading="lazy" class="w-full h-full object-cover" onerror="this.src='${defaultCover}'">
+                        ${fromBadge}
+                    </div>
+                    <div class="flex-1 flex flex-col justify-between">
+                        <div><h4 class="font-bold text-dynamic-main text-sm truncate cursor-pointer hover:underline" onclick="openReader('${book.id}')">${escapeHtml(book.title)}</h4><p class="text-xs text-dynamic-muted truncate">${escapeHtml(book.author || 'غير معروف')}</p></div>
+                        <div class="mt-3 flex items-center gap-2"><div class="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all" style="width: ${st.progress}%; background-color: var(--primary)"></div></div><span class="text-[10px] text-dynamic-muted font-bold w-8 text-left">${st.progress}%</span></div>
+                    </div>
+                </div>`;
+        }
+
+        // كارط ديال كتاب ديال صديق
+        function communityCard(book) {
+            const inLib = library.some(b => b.id === book.id);
+            const vis = VISIBILITY[book.visibility] || VISIBILITY.friends;
+            return `
+                <div class="bg-dynamic-card rounded-2xl p-3 shadow-sm hover:shadow-xl transition-all border border-dynamic flex flex-col relative mt-2 group cursor-pointer" onclick="openBookDetails('${book.id}')">
+                    <div class="relative w-full aspect-[2/3] rounded-xl overflow-hidden mb-3 bg-gray-200 dark:bg-gray-700">
+                        <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"><span class="bg-white/90 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full">التفاصيل</span></div>
+                        <img src="${escapeHtml(coverUrl(book))}" alt="" loading="lazy" class="w-full h-full object-cover" onerror="this.src='${defaultCover}'">
+                        ${inLib ? `<span class="absolute top-2 right-2 z-20 bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full shadow">✓ ف مكتبتي</span>` : ''}
+                        <span class="absolute top-2 left-2 z-20 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full" title="${escapeHtml(vis.label)}">${vis.icon}</span>
+                    </div>
+                    <h4 class="font-bold text-dynamic-main text-sm truncate">${escapeHtml(book.title)}</h4>
+                    <p class="text-xs text-dynamic-muted truncate">${escapeHtml(book.author || 'غير معروف')}</p>
+                    <div class="flex items-center gap-1.5 mt-2">${avatarHtml(book.owner, 'w-5 h-5', 'text-[10px]')}<span class="text-[11px] text-dynamic-muted truncate">${escapeHtml(book.owner ? book.owner.username : 'مستخدم')}</span></div>
+                </div>`;
+        }
+
+        function renderHome() {
+            const reading = library.filter(b => b.st.progress > 0 && !b.st.is_read).sort((a, b) => new Date(b.st.updated_at) - new Date(a.st.updated_at)).slice(0, 5);
+            document.getElementById('homeContinueWrap').classList.toggle('hidden', reading.length === 0);
+            document.getElementById('homeContinueGrid').innerHTML = reading.map(libraryCard).join('');
+            const recent = library.slice(0, 5);
+            document.getElementById('homeRecentGrid').innerHTML = recent.map(libraryCard).join('');
+            document.getElementById('homeRecentEmpty').classList.toggle('hidden', recent.length > 0);
+        }
+
+        function setLibraryFilter(f) {
+            libraryFilter = f;
+            document.querySelectorAll('#libraryFilters .chip').forEach(c => c.classList.toggle('active', c.dataset.filter === f));
+            renderLibrary();
+        }
+
+        function matchesSearch(book, q) {
+            if (!q) return true;
+            q = q.toLowerCase();
+            return [book.title, book.author, book.category, book.owner && book.owner.username].some(v => (v || '').toLowerCase().includes(q));
+        }
+
+        function renderLibrary() {
+            const q = document.getElementById('librarySearch').value.trim();
+            const filters = {
+                all: () => true,
+                reading: b => b.st.progress > 0 && !b.st.is_read,
+                read: b => b.st.is_read,
+                mine: b => isOwner(b),
+                friends: b => !isOwner(b),
+            };
+            const list = library.filter(filters[libraryFilter]).filter(b => matchesSearch(b, q));
+            const grid = document.getElementById('libraryGrid'); const empty = document.getElementById('libraryEmpty');
+            grid.innerHTML = list.map(libraryCard).join('');
+            empty.classList.toggle('hidden', list.length > 0); empty.classList.toggle('flex', list.length === 0);
+        }
+
+        function renderFavorites() {
+            const list = library.filter(b => b.st.is_favorite);
+            document.getElementById('favoritesGrid').innerHTML = list.map(libraryCard).join('');
+            const empty = document.getElementById('favoritesEmpty');
+            empty.classList.toggle('hidden', list.length > 0); empty.classList.toggle('flex', list.length === 0);
+        }
+
+        function renderCommunity() {
+            const q = document.getElementById('searchCommunity').value.trim();
+            const cat = document.getElementById('communityCategory').value;
+            const list = communityBooks.filter(b => (!cat || b.category === cat) && matchesSearch(b, q));
+            document.getElementById('communityGrid').innerHTML = list.map(communityCard).join('');
+            document.getElementById('communityEmpty').classList.toggle('hidden', list.length > 0 || q || cat);
+        }
+
+        function renderExplore() {
+            const q = document.getElementById('searchInput').value.trim();
+            const c = document.getElementById('exploreShelves'); const emp = document.getElementById('exploreEmpty');
+            const f = library.filter(b => matchesSearch(b, q));
+            if (f.length === 0) { c.innerHTML = ''; emp.classList.remove('hidden'); return; }
+            emp.classList.add('hidden');
+            const groups = {}; f.forEach(b => { (groups[b.category] = groups[b.category] || []).push(b); });
+            c.innerHTML = Object.entries(groups).map(([cat, arr]) => `
+                <div class="relative mt-12">
+                    <div class="absolute -top-10 right-4 bg-[#4e342e] text-[#f5f5f5] px-6 py-2 rounded-t-lg font-bold z-0">${escapeHtml(cat)} <span class="opacity-60 text-xs">(${arr.length})</span></div>
+                    <div class="flex items-end px-4 min-h-[14rem] overflow-x-auto pb-0 hide-scrollbar relative z-10">
+                        ${arr.map((b, i) => `<div class="relative group cursor-pointer transform transition hover:-translate-y-6 hover:scale-105 mx-1 md:mx-2" onclick="openReader('${b.id}')" title="${escapeHtml(b.title)}"><div class="${bookColors[i % bookColors.length]} w-14 md:w-16 h-44 md:h-52 rounded-sm border-l-4 border-white/40 shadow-[-6px_5px_10px_rgba(0,0,0,0.5)] flex items-center justify-center p-2"><span class="text-white text-xs md:text-sm font-bold truncate w-full text-center" style="writing-mode: vertical-rl">${escapeHtml(b.title)}</span></div></div>`).join('')}
+                    </div>
+                    <div class="relative z-10 w-full"><div class="h-4 bg-[#795548] wood-texture w-full rounded-t-sm"></div><div class="h-8 bg-[#5d4037] wood-texture w-full rounded-b-md shadow-[0_15px_20px_rgba(0,0,0,0.4)]"></div></div>
+                </div>`).join('');
+        }
+
+        function personRow(p, actionsHtml, sub = '') {
+            return `<div class="bg-dynamic-card p-4 rounded-xl border border-dynamic flex items-center gap-3 shadow-sm">
+                ${avatarHtml(p)}
+                <div class="flex-1 min-w-0"><h4 class="font-bold text-dynamic-main truncate">${escapeHtml(p.username)}</h4><p class="text-xs text-dynamic-muted truncate">${escapeHtml(sub || p.bio || '')}</p></div>
+                <div class="flex gap-2 shrink-0">${actionsHtml}</div>
+            </div>`;
+        }
+
+        function renderFriends() {
+            const btn = (label, onclick, cls) => `<button onclick="${onclick}" class="text-xs font-bold px-3 py-2 rounded-lg transition ${cls}">${label}</button>`;
+            document.getElementById('incomingWrap').classList.toggle('hidden', incoming.length === 0);
+            document.getElementById('incomingCount').textContent = incoming.length ? `(${incoming.length})` : '';
+            document.getElementById('incomingList').innerHTML = incoming.map(r => personRow(r.profile,
+                btn('قبول', `acceptFriend(${r.friendshipId})`, 'bg-green-600 text-white hover:bg-green-700') +
+                btn('رفض', `removeFriendship(${r.friendshipId}, 'decline')`, 'bg-gray-200 dark:bg-gray-700 text-dynamic-main'),
+                'بغا يكون صاحبك')).join('');
+
+            document.getElementById('friendsList').innerHTML = friends.map(f => {
+                const count = communityBooks.filter(b => b.owner_id === f.profile.id).length;
+                return personRow(f.profile,
+                    btn('📚 كتبو', `showFriendBooks('${f.profile.id}')`, 'text-white hover:opacity-80" style="background-color: var(--primary)') +
+                    btn('✕', `removeFriendship(${f.friendshipId}, 'unfriend')`, 'bg-gray-200 dark:bg-gray-700 text-dynamic-muted hover:text-red-500'),
+                    `${count} كتاب مشارك`);
+            }).join('');
+            document.getElementById('friendsEmpty').classList.toggle('hidden', friends.length > 0);
+
+            document.getElementById('outgoingWrap').classList.toggle('hidden', outgoing.length === 0);
+            document.getElementById('outgoingList').innerHTML = outgoing.map(r => personRow(r.profile,
+                btn('إلغاء', `removeFriendship(${r.friendshipId}, 'cancel')`, 'bg-gray-200 dark:bg-gray-700 text-dynamic-main'), 'كيتسنى القبول')).join('');
+        }
+
+        function renderProfile() {
+            if (!myProfile) return;
+            document.getElementById('profileNameDisplay').innerText = myProfile.username;
+            document.getElementById('profileEmailDisplay').innerText = me ? me.email : '';
+            document.querySelectorAll('.friend-code-display').forEach(el => el.innerText = myProfile.friend_code);
+            document.getElementById('profileBioInput').value = myProfile.bio || '';
+            document.getElementById('profileUsernameInput').value = myProfile.username;
+            const img = document.getElementById('profileAvatar'); const ph = document.getElementById('profileAvatarPlaceholder');
+            if (myProfile.avatar_path) { img.src = publicImageUrl(myProfile.avatar_path); img.classList.remove('hidden'); ph.classList.add('hidden'); }
+            else { img.classList.add('hidden'); ph.classList.remove('hidden'); }
+            renderLibName();
+        }
+
+        // =====================================================================
+        // 7. التنقل
+        // =====================================================================
+        function switchView(target) {
+            if (currentView === 'reader' && target !== 'reader') stopReader();
+            currentView = target;
+            views.forEach(v => { const el = document.getElementById(`view-${v}`); if (el) { el.classList.add('hidden'); el.classList.remove('block', 'flex'); } });
+            const reader = target === 'reader';
+            const tel = document.getElementById(`view-${target}`);
+            tel.classList.remove('hidden'); tel.classList.add(reader ? 'flex' : 'block');
+            document.getElementById('desktopSidebar').style.display = reader ? 'none' : '';
+            document.getElementById('mainHeader').style.display = reader ? 'none' : '';
+            document.getElementById('mobileNav').style.display = reader ? 'none' : '';
+            if (viewTitles[target]) document.getElementById('headerTitle').innerText = viewTitles[target];
+            document.querySelectorAll('.nav-item').forEach(n => {
+                const active = n.id === `nav-${target}`;
+                n.className = `nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${active ? 'text-white shadow-lg' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`;
+                n.style.backgroundColor = active ? 'var(--primary)' : 'transparent';
+            });
+            document.querySelectorAll('.mob-item').forEach(m => {
+                const active = m.id === `mob-${target}`;
+                m.className = `mob-item relative flex flex-col items-center pt-2 w-1/6 transition-colors ${active ? '' : 'text-dynamic-muted'}`;
+                m.style.color = active ? 'var(--primary)' : '';
+            });
+            document.getElementById('mainScrollArea').scrollTop = 0;
+        }
+
+        function openModal(id) { const m = document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); setTimeout(() => m.classList.remove('opacity-0'), 10); }
+        function closeModal(id) { const m = document.getElementById(id); m.classList.add('opacity-0'); setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300); }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') document.querySelectorAll('.modal').forEach(m => { if (!m.classList.contains('hidden')) closeModal(m.id); });
+            if (currentView === 'reader' && !e.target.matches('input, textarea')) {
+                if (e.key === 'ArrowLeft') nextPage();   // RTL: اليسار = الصفحة الجاية
+                if (e.key === 'ArrowRight') prevPage();
+            }
+        });
+        document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
+
+        // =====================================================================
+        // 8. رفع كتاب
+        // =====================================================================
+        function openAddModal() {
+            ['bookTitle', 'bookAuthor', 'pdfFile', 'customCoverFile'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('bookVisibility').value = 'friends';
+            openModal('addModal');
+        }
+        // العنوان كيتعمر بوحدو من اسم الملف
+        function onPdfPicked(input) {
+            const f = input.files[0]; if (!f) return;
+            const t = document.getElementById('bookTitle');
+            if (!t.value.trim()) t.value = f.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, 200);
+            if (f.size > MAX_PDF_BYTES) toast(`الملف ${formatMB(f.size)}، والحد هو 50MB`, 'error');
+        }
+
+        async function addBook() {
+            const title = document.getElementById('bookTitle').value.trim();
+            const author = document.getElementById('bookAuthor').value.trim();
+            const category = document.getElementById('bookCategory').value;
+            const visibility = document.getElementById('bookVisibility').value;
+            const file = document.getElementById('pdfFile').files[0];
+            const custom = document.getElementById('customCoverFile').files[0];
+            if (!file) { toast('اختار ملف PDF', 'error'); return; }
+            if (!title) { toast('كتب عنوان الكتاب', 'error'); return; }
+            if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') { toast('الملف خاصو يكون PDF', 'error'); return; }
+            if (file.size > MAX_PDF_BYTES) { toast(`الملف ${formatMB(file.size)}، والحد هو 50MB`, 'error'); return; }
+
+            const btn = document.getElementById('addBtn');
+            const id = crypto.randomUUID();
+            const pdfPath = `${me.id}/${id}.pdf`;
+            let coverPath = null, pdfUploaded = false;
+            try {
+                setBusy(btn, true, 'كنقراو الكتاب...');
+                const info = await readPdfInfo(file);
+                if (info.broken) throw new Error('هاد الملف ما بانش PDF صحيح');
+                const coverBlob = custom ? await resizeImage(custom, 600) : info.coverBlob;
+
+                setBusy(btn, true, `جاري الرفع (${formatMB(file.size)})... ⏳`);
+                const up = await sb.storage.from('pdfs').upload(pdfPath, file, { contentType: 'application/pdf', upsert: false });
+                if (up.error) throw up.error;
+                pdfUploaded = true;
+
+                if (coverBlob) {
+                    coverPath = `${me.id}/covers/${id}.jpg`;
+                    const cu = await sb.storage.from('images').upload(coverPath, coverBlob, { contentType: 'image/jpeg', upsert: true });
+                    if (cu.error) coverPath = null; // الغلاف ماشي ضروري
+                }
+
+                setBusy(btn, true, 'جاري الحفظ...');
+                const ins = await sb.from('books').insert({ id, title, author, category, visibility, pdf_path: pdfPath, cover_path: coverPath, total_pages: info.pages, file_size: file.size });
+                if (ins.error) throw ins.error;
+                const st = await sb.from('book_state').insert({ book_id: id });
+                if (st.error) throw st.error;
+
+                cachePdf(id, file);
+                closeModal('addModal');
+                toast('تزاد الكتاب لمكتبتك ✅', 'success');
+                await loadLibrary(); renderAll();
+            } catch (e) {
+                // نمسحو داكشي اللي ترفع باش ما يبقاش ملف يتيم
+                if (pdfUploaded) await sb.storage.from('pdfs').remove([pdfPath]);
+                if (coverPath) await sb.storage.from('images').remove([coverPath]);
+                toast(errMsg(e), 'error');
+            } finally { setBusy(btn, false); }
+        }
+
+        // =====================================================================
+        // 9. التعديل، المسح، المفضلة...
+        // =====================================================================
+        function findBook(id) { return library.find(b => b.id === id) || communityBooks.find(b => b.id === id); }
+
+        function openEditModal(id) {
+            const book = findBook(id); if (!book || !isOwner(book)) return;
+            document.getElementById('editBookId').value = book.id;
+            document.getElementById('editBookTitle').value = book.title;
+            document.getElementById('editBookAuthor').value = book.author;
+            document.getElementById('editBookCategory').value = book.category;
+            document.getElementById('editBookVisibility').value = book.visibility;
+            document.getElementById('editCustomCover').value = '';
+            openModal('editModal');
+        }
+
+        async function saveEditBook() {
+            const id = document.getElementById('editBookId').value;
+            const book = findBook(id); if (!book) return;
+            const title = document.getElementById('editBookTitle').value.trim();
+            if (!title) { toast('العنوان ما يمكنش يكون خاوي', 'error'); return; }
+            const updates = {
+                title,
+                author: document.getElementById('editBookAuthor').value.trim(),
+                category: document.getElementById('editBookCategory').value,
+                visibility: document.getElementById('editBookVisibility').value,
+            };
+            const btn = document.getElementById('editSaveBtn'); setBusy(btn, true, 'جاري الحفظ...');
+            try {
+                const custom = document.getElementById('editCustomCover').files[0];
+                let oldCover = null;
+                if (custom) {
+                    const blob = await resizeImage(custom, 600);
+                    const path = `${me.id}/covers/${id}-${Date.now()}.jpg`;
+                    const up = await sb.storage.from('images').upload(path, blob, { contentType: 'image/jpeg' });
+                    if (up.error) throw up.error;
+                    oldCover = book.cover_path; updates.cover_path = path;
+                }
+                const { error } = await sb.from('books').update(updates).eq('id', id);
+                if (error) throw error;
+                if (oldCover) sb.storage.from('images').remove([oldCover]);
+                closeModal('editModal');
+                toast('تحفظات التعديلات ✅', 'success');
+                await loadLibrary(); renderAll();
+            } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(btn, false); }
+        }
+
+        async function deleteBook(id) {
+            const book = findBook(id); if (!book) return;
+            if (isOwner(book)) {
+                if (!confirm(`متأكد باغي تمسح "${book.title}" نهائيا؟\nغادي يتمسح الملف من السحاب، وحتى عند الأصدقاء اللي زادوه.`)) return;
+                const { error } = await sb.from('books').delete().eq('id', id);
+                if (error) { toast(errMsg(error), 'error'); return; }
+                await sb.storage.from('pdfs').remove([book.pdf_path]);
+                if (book.cover_path) await sb.storage.from('images').remove([book.cover_path]);
+                toast('تمسح الكتاب', 'success');
+            } else {
+                if (!confirm(`نحيدو "${book.title}" من مكتبتك؟ (الكتاب كيبقى عند صاحبو)`)) return;
+                const { error } = await sb.from('book_state').delete().eq('user_id', me.id).eq('book_id', id);
+                if (error) { toast(errMsg(error), 'error'); return; }
+                toast('تحيد من مكتبتك', 'success');
+            }
+            uncachePdf(id);
+            await Promise.all([loadLibrary(), loadCommunity()]); renderAll();
+        }
+
+        async function updateState(id, changes) {
+            const book = library.find(b => b.id === id); if (!book) return;
+            const before = { ...book.st };
+            Object.assign(book.st, changes); renderAll();                 // كنبدلو ف الواجهة ديريكت
+            const { error } = await sb.from('book_state').update(changes).eq('user_id', me.id).eq('book_id', id);
+            if (error) { book.st = before; renderAll(); toast(errMsg(error), 'error'); }
+        }
+        function toggleFav(id) { const b = library.find(x => x.id === id); if (b) updateState(id, { is_favorite: !b.st.is_favorite }); }
+        function toggleRead(id) { const b = library.find(x => x.id === id); if (b) updateState(id, { is_read: !b.st.is_read }); }
+
+        async function openNotesModal(id) {
+            document.getElementById('notesBookId').value = id;
+            const area = document.getElementById('bookNotesArea');
+            area.value = ''; area.placeholder = 'جاري التحميل...';
+            openModal('notesModal');
+            const { data } = await sb.from('book_notes').select('content').eq('user_id', me.id).eq('book_id', id).maybeSingle();
+            area.value = data ? data.content : ''; area.placeholder = 'سجل هنا اقتباساتك وملاحظاتك...';
+        }
+        async function saveNotes() {
+            const book_id = document.getElementById('notesBookId').value;
+            const content = document.getElementById('bookNotesArea').value;
+            const { error } = await sb.from('book_notes').upsert({ user_id: me.id, book_id, content }, { onConflict: 'user_id,book_id' });
+            if (error) { toast(errMsg(error), 'error'); return; }
+            closeModal('notesModal'); toast('تحفظات الملاحظات ✅', 'success');
+        }
+
+        // =====================================================================
+        // 10. كتب الأصدقاء
+        // =====================================================================
+        function openBookDetails(id) {
+            const book = findBook(id); if (!book) return;
+            const inLib = library.some(b => b.id === id);
+            const vis = VISIBILITY[book.visibility] || VISIBILITY.friends;
+            document.getElementById('detailCover').src = coverUrl(book);
+            document.getElementById('detailTitle').innerText = book.title;
+            document.getElementById('detailAuthor').innerText = book.author || 'غير معروف';
+            const pill = t => `<span class="text-[11px] bg-[var(--app-bg)] border border-dynamic text-dynamic-muted px-2 py-1 rounded-full">${t}</span>`;
+            document.getElementById('detailMeta').innerHTML =
+                pill(`📂 ${escapeHtml(book.category)}`) + pill(`📄 ${book.total_pages} صفحة`) + pill(`${vis.icon} ${escapeHtml(vis.label)}`) +
+                `<div class="w-full flex items-center justify-center gap-2 mt-2">${avatarHtml(book.owner, 'w-6 h-6', 'text-xs')}<span class="text-xs text-dynamic-main font-bold">${escapeHtml(book.owner ? book.owner.username : 'مستخدم')}</span></div>`;
+            document.getElementById('detailActions').innerHTML = inLib
+                ? `<button onclick="closeModal('bookDetailsModal'); openReader('${book.id}')" class="w-full text-white text-sm font-bold py-2.5 rounded-xl shadow-md hover:opacity-80" style="background-color: var(--primary)">📖 اقرأ</button>`
+                : `<button id="addToLibBtn" onclick="addToLibrary('${book.id}')" class="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2.5 rounded-xl shadow-md">➕ زيدو لمكتبتي واقرأ</button>`;
+            openModal('bookDetailsModal');
+        }
+
+        async function addToLibrary(id) {
+            const btn = document.getElementById('addToLibBtn'); setBusy(btn, true, 'جاري الإضافة...');
+            const { error } = await sb.from('book_state').insert({ book_id: id });
+            if (error && error.code !== '23505') { setBusy(btn, false); toast(errMsg(error), 'error'); return; } // 23505 = ديجا كاين
+            await loadLibrary(); renderAll();
+            closeModal('bookDetailsModal');
+            openReader(id);
+        }
+
+        function showFriendBooks(friendId) {
+            const f = friends.find(x => x.profile.id === friendId);
+            switchView('community');
+            document.getElementById('communityCategory').value = '';
+            document.getElementById('searchCommunity').value = f ? f.profile.username : '';
+            renderCommunity();
+        }
+
+        // =====================================================================
+        // 11. الأصدقاء
+        // =====================================================================
+        async function sendFriendRequest() {
+            const input = document.getElementById('friendSearchCode');
+            const code = input.value.trim().toUpperCase();
+            if (code.length !== 6) { toast('الكود فيه 6 حروف/أرقام', 'error'); return; }
+            const btn = document.getElementById('friendReqBtn'); setBusy(btn, true, '...');
+            try {
+                const { data, error } = await sb.rpc('send_friend_request', { code });
+                if (error) throw error;
+                const msgs = {
+                    sent: ['تصيفط الطلب ✅ كتسنى يقبلو', 'success'],
+                    accepted: ['ولّيتو أصدقاء 🎉 (كان صيفط ليك طلب من قبل)', 'success'],
+                    already_sent: ['ديجا صيفطتي ليه طلب، كتسنى يقبلو', 'info'],
+                    already_friends: ['راكم ديجا أصدقاء 😊', 'info'],
+                    not_found: ['ما لقينا حتى واحد بهاد الكود', 'error'],
+                    self: ['هادا الكود ديالك نتا 😄', 'info'],
+                };
+                const [text, type] = msgs[data] || ['تم', 'info'];
+                toast(text, type);
+                if (data === 'sent' || data === 'accepted') { input.value = ''; await Promise.all([loadFriends(), loadCommunity()]); renderAll(); }
+            } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(btn, false); }
+        }
+
+        async function acceptFriend(friendshipId) {
+            const { error } = await sb.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
+            if (error) { toast(errMsg(error), 'error'); return; }
+            toast('ولّيتو أصدقاء 🎉', 'success');
+            await Promise.all([loadFriends(), loadCommunity()]); renderAll();
+        }
+
+        async function removeFriendship(friendshipId, kind) {
+            const confirmText = { unfriend: 'متأكد باغي تحيدو من الأصدقاء؟ ما بقاش غادي تشوفو الكتب ديال بعضياتكم.', decline: null, cancel: null }[kind];
+            if (confirmText && !confirm(confirmText)) return;
+            const { error } = await sb.from('friendships').delete().eq('id', friendshipId);
+            if (error) { toast(errMsg(error), 'error'); return; }
+            await Promise.all([loadFriends(), loadCommunity(), loadLibrary()]); renderAll();
+        }
+
+        async function copyCode() {
+            if (!myProfile) return;
+            try { await navigator.clipboard.writeText(myProfile.friend_code); toast('تنسخ الكود 📋', 'success'); }
+            catch (e) { toast(`الكود ديالك: ${myProfile.friend_code}`); }
+        }
+
+        // =====================================================================
+        // 12. الحساب
+        // =====================================================================
+        async function uploadAvatar(input) {
+            const file = input.files[0]; input.value = '';
+            if (!file) return;
+            try {
+                const blob = await resizeImage(file, 300);
+                const path = `${me.id}/avatar-${Date.now()}.jpg`;
+                const up = await sb.storage.from('images').upload(path, blob, { contentType: 'image/jpeg' });
+                if (up.error) throw up.error;
+                const old = myProfile.avatar_path;
+                const { error } = await sb.from('profiles').update({ avatar_path: path }).eq('id', me.id);
+                if (error) throw error;
+                if (old) sb.storage.from('images').remove([old]);
+                myProfile.avatar_path = path; renderProfile();
+                toast('تبدلات الصورة ✅', 'success');
+            } catch (e) { toast(errMsg(e), 'error'); }
+        }
+
+        async function saveProfile() {
+            const username = document.getElementById('profileUsernameInput').value.trim();
+            const bio = document.getElementById('profileBioInput').value.trim();
+            const password = document.getElementById('profilePasswordInput').value;
+            if (!username) { toast('اسم المستخدم ما يمكنش يكون خاوي', 'error'); return; }
+            if (password && password.length < 6) { toast('كلمة المرور خاصها 6 أحرف على الأقل', 'error'); return; }
+            const btn = document.getElementById('saveProfileBtn'); setBusy(btn, true, 'جاري الحفظ...');
+            try {
+                const { error } = await sb.from('profiles').update({ username, bio }).eq('id', me.id);
+                if (error) throw error;
+                if (password) {
+                    const r = await sb.auth.updateUser({ password });
+                    if (r.error) throw r.error;
+                    document.getElementById('profilePasswordInput').value = '';
+                }
+                myProfile.username = username; myProfile.bio = bio; renderProfile();
+                toast('تحفظ ✅', 'success');
+            } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(btn, false); }
+        }
+
+        // =====================================================================
+        // 13. القارئ
+        // =====================================================================
+        let currentPdfDoc = null, pageNum = 1, pageRendering = false, pageNumPending = null, readerZoom = 1;
+        let currentReadingBookId = null, saveTimer = null, readerToken = 0;
+        const canvas = document.getElementById('pdf-render'); const ctx = canvas.getContext('2d');
+
+        async function openReader(id) {
+            const book = library.find(b => b.id === id);
+            if (!book) { openBookDetails(id); return; }
+            const token = ++readerToken;
+            currentReadingBookId = id; readerZoom = 1;
+            document.getElementById('readerTitle').innerText = book.title;
+            document.getElementById('page_count').textContent = book.total_pages || '?';
+            document.getElementById('readerLoading').classList.remove('hidden');
+            document.getElementById('readerLoadingText').textContent = 'جاري تحميل الكتاب...';
+            canvas.classList.add('invisible');
+            switchView('reader');
+            try {
+                let blob = await getCachedPdf(id);
+                if (!blob) {
+                    document.getElementById('readerLoadingText').textContent = `جاري تحميل الكتاب${book.file_size ? ` (${formatMB(book.file_size)})` : ''}...`;
+                    const { data, error } = await sb.storage.from('pdfs').download(book.pdf_path);
+                    if (error) throw error;
+                    blob = data; cachePdf(id, blob);
+                }
+                if (token !== readerToken) return; // سد القارئ ولا حل كتاب آخر
+                const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+                if (token !== readerToken) { doc.destroy(); return; }
+                currentPdfDoc = doc;
+                document.getElementById('page_count').textContent = doc.numPages;
+                pageNum = Math.min(Math.max(book.st.current_page || 1, 1), doc.numPages);
+                document.getElementById('readerLoading').classList.add('hidden');
+                canvas.classList.remove('invisible');
+                renderPage(pageNum);
+            } catch (e) {
+                if (token !== readerToken) return;
+                document.getElementById('readerLoadingText').textContent = '⚠️ ' + errMsg(e);
+                uncachePdf(id);
+            }
+        }
+
+        function renderPage(num) {
+            if (!currentPdfDoc) return;
+            pageRendering = true;
+            currentPdfDoc.getPage(num).then(page => {
+                const containerW = document.getElementById('canvasContainer').clientWidth - 32;
+                const fit = containerW / page.getViewport({ scale: 1 }).width;
+                const vp = page.getViewport({ scale: Math.min(fit, 1.6) * readerZoom * (window.devicePixelRatio || 1) });
+                canvas.width = vp.width; canvas.height = vp.height;
+                canvas.style.width = (vp.width / (window.devicePixelRatio || 1)) + 'px';
+                return page.render({ canvasContext: ctx, viewport: vp }).promise;
+            }).then(() => {
+                pageRendering = false;
+                document.getElementById('page_num_input').value = num;
+                document.getElementById('canvasContainer').scrollTop = 0;
+                if (pageNumPending !== null) { const n = pageNumPending; pageNumPending = null; renderPage(n); }
+                scheduleProgressSave(num);
+            }).catch(() => { pageRendering = false; });
+        }
+
+        // كنحفظو فين وصلتي (مرة وحدة بعد ما تحبس، ماشي مع كل صفحة)
+        function scheduleProgressSave(num) {
+            const book = library.find(b => b.id === currentReadingBookId);
+            if (!book || !currentPdfDoc) return;
+            const total = currentPdfDoc.numPages;
+            const changes = { current_page: num, progress: Math.round((num / total) * 100) };
+            if (num === total) changes.is_read = true;
+            Object.assign(book.st, changes);
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => flushProgress(book.id, changes), 1200);
+        }
+        function flushProgress(id, changes) {
+            sb.from('book_state').update(changes).eq('user_id', me.id).eq('book_id', id).then(({ error }) => { if (error) console.warn(error); });
+        }
+
+        function queueRenderPage(num) { if (pageRendering) pageNumPending = num; else renderPage(num); }
+        function prevPage() { if (!currentPdfDoc || pageNum <= 1) return; pageNum--; queueRenderPage(pageNum); }
+        function nextPage() { if (!currentPdfDoc || pageNum >= currentPdfDoc.numPages) return; pageNum++; queueRenderPage(pageNum); }
+        function goToPage(v) { const n = parseInt(v, 10); if (currentPdfDoc && n >= 1 && n <= currentPdfDoc.numPages) { pageNum = n; queueRenderPage(n); } else document.getElementById('page_num_input').value = pageNum; }
+        function zoomReader(delta) { readerZoom = Math.min(3, Math.max(0.5, readerZoom + delta)); queueRenderPage(pageNum); }
+
+        function stopReader() {
+            readerToken++;
+            if (saveTimer) { clearTimeout(saveTimer); const b = library.find(x => x.id === currentReadingBookId); if (b) flushProgress(b.id, { current_page: b.st.current_page, progress: b.st.progress, is_read: b.st.is_read }); saveTimer = null; }
+            if (currentPdfDoc) { currentPdfDoc.destroy(); currentPdfDoc = null; }
+            renderAll();
+        }
+        function closeReader() { switchView('library'); }
+
+        // سحب بالصبع ف التيليفون
+        (() => {
+            let x0 = null;
+            const c = document.getElementById('canvasContainer');
+            c.addEventListener('touchstart', e => { x0 = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
+            c.addEventListener('touchend', e => {
+                if (x0 === null) return;
+                const dx = e.changedTouches[0].clientX - x0; x0 = null;
+                if (Math.abs(dx) > 60) { dx > 0 ? nextPage() : prevPage(); } // RTL
+            });
+        })();
+
+        // =====================================================================
+        // 14. الإعدادات
+        // =====================================================================
+        async function loadSettings() {
+            try { const s = await localforage.getItem('myLibSet'); if (s) appSettings = { ...appSettings, ...s }; } catch (e) {}
+            if (appSettings.libraryName === 'مكتبتي') appSettings.libraryName = '';
+            applySettings();
+        }
+        function applySettings() {
+            const dark = appSettings.theme === 'dark';
+            document.documentElement.toggleAttribute('data-theme', dark);
+            if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.classList.toggle('dark', dark);
+            document.documentElement.style.setProperty('--primary', appSettings.primaryColor);
+            document.body.style.backgroundImage = bgTextures[appSettings.bgTexture] || 'none';
+        }
+        function openSettingsModal() {
+            document.getElementById('setLibName').value = appSettings.libraryName;
+            document.getElementById('setPrimaryColor').value = appSettings.primaryColor;
+            document.querySelector(`input[name="setTheme"][value="${appSettings.theme}"]`).checked = true;
+            const tex = document.querySelector(`input[name="setBgTexture"][value="${appSettings.bgTexture}"]`); if (tex) tex.checked = true;
+            openModal('settingsModal');
+        }
+        async function saveSettings() {
+            appSettings.libraryName = document.getElementById('setLibName').value.trim();
+            appSettings.primaryColor = document.getElementById('setPrimaryColor').value;
+            appSettings.theme = document.querySelector('input[name="setTheme"]:checked').value;
+            const tex = document.querySelector('input[name="setBgTexture"]:checked'); appSettings.bgTexture = tex ? tex.value : 'none';
+            try { await localforage.setItem('myLibSet', appSettings); } catch (e) {}
+            applySettings(); renderLibName(); switchView(currentView); closeModal('settingsModal');
+        }
+
+        // =====================================================================
+        // 15. البداية
+        // =====================================================================
+        fillSelects();
+        loadSettings();
+        switchAuthTab('login');
+        switchView('home');
+    </script>
+</body>
+</html>

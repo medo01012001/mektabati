@@ -1,0 +1,9 @@
+# ملفات محلية ما خاصهاش تمشي لـ GitHub
+.claude/
+deploy/
+legacy-firebase/
+# الصفحات القديمة (دابا كلشي داخل index.html)
+categories.html
+explore.html
+favorites.html
+library.html
