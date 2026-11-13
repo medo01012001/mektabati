@@ -57,6 +57,21 @@
         .doc-reader a { color: #2563eb; text-decoration: underline; }
         /* المحادثات */
         #mainScrollArea.chat-mode { padding: 0; overflow: hidden; }
+        /* القارئ ف التيليفون: كياخد الشاشة كاملة (بلا الهوامش ديال الصفحة) */
+        #canvasContainer { touch-action: manipulation; }
+        @media (max-width: 767px) {
+            #view-reader:not(.hidden) { position: fixed; inset: 0; z-index: 60; border-radius: 0; height: 100dvh; }
+            #view-reader .reader-bottom { padding-bottom: calc(.375rem + env(safe-area-inset-bottom)); }
+        }
+        /* ملء الشاشة: الكتاب بوحدو، والأزرار كيبانو ملي تورك ف الوسط */
+        #view-reader .reader-fs-only { display: none; }
+        #view-reader.immersive { position: fixed; inset: 0; z-index: 80; border-radius: 0; height: 100dvh; }
+        #view-reader.immersive .reader-bar { display: none; }
+        #view-reader.immersive.show-bars .reader-bar { display: flex; }
+        #view-reader.immersive .reader-fs-only { display: flex; }
+        #view-reader.immersive.show-bars .reader-fs-only { display: none; }
+        #view-reader.immersive #canvasContainer { padding: 0; }
+        #view-reader.immersive #pdf-render { box-shadow: none; }
         @media (min-width: 768px) { #mainScrollArea.chat-mode { padding: 1.5rem; } }
         @media (max-width: 767px) {
             body.chat-open #mobileNav, body.chat-open #mainHeader { display: none !important; }
@@ -313,6 +328,24 @@
                                 <span><span class="block text-sm font-bold text-dynamic-main">نبان ف لائحة "القراء"</span><span class="block text-xs text-dynamic-muted">إلا طفيتيها، غير أصدقاءك والناس اللي عندك معاهم طلب كيشوفو البروفايل ديالك</span></span>
                                 <input type="checkbox" id="profileDiscoverable" class="w-5 h-5 shrink-0" checked>
                             </label>
+                            <div class="p-4 rounded-xl border border-dynamic bg-[var(--app-bg)] space-y-3">
+                                <h4 class="text-sm font-bold text-dynamic-main">🔔 الإشعارات</h4>
+                                <label class="flex items-center justify-between gap-3 cursor-pointer">
+                                    <span><span class="block text-sm font-bold text-dynamic-main">صوت الجرس</span><span class="block text-xs text-dynamic-muted">رنة ملي توصلك رسالة ولا طلب صداقة</span></span>
+                                    <span class="flex items-center gap-2 shrink-0">
+                                        <button type="button" onclick="event.preventDefault(); unlockAudio(); playChime('msg', true)" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-dynamic-main">جرب 🔊</button>
+                                        <input type="checkbox" id="notifSound" class="w-5 h-5" onchange="setNotifPref('sound', this.checked)">
+                                    </span>
+                                </label>
+                                <div class="flex items-center justify-between gap-3">
+                                    <span><span class="block text-sm font-bold text-dynamic-main">إشعارات المتصفح</span><span id="notifDesktopHint" class="block text-xs text-dynamic-muted">تبان ليك حتى إلا كنتي ف شي صفحة أخرى</span></span>
+                                    <button type="button" id="notifDesktopBtn" onclick="toggleDesktopNotif()" class="text-xs font-bold px-3 py-1.5 rounded-lg text-white shrink-0" style="background-color: var(--primary)">شعل</button>
+                                </div>
+                                <label id="notifEmailRow" class="hidden flex items-center justify-between gap-3 cursor-pointer">
+                                    <span><span class="block text-sm font-bold text-dynamic-main">الإشعارات بالإيميل</span><span class="block text-xs text-dynamic-muted">رسائل (ملي ما تكونش ف الموقع)، طلبات الصداقة، والتقييمات على كتبك</span></span>
+                                    <input type="checkbox" id="notifEmail" class="w-5 h-5 shrink-0" onchange="setEmailNotif(this.checked)">
+                                </label>
+                            </div>
                             <button id="saveProfileBtn" onclick="saveProfile()" class="text-white font-bold py-3 px-6 rounded-xl transition shadow-lg w-full mt-4 hover:opacity-80" style="background-color: var(--primary)">حفظ التغييرات</button>
                         </div>
                     </div>
@@ -400,32 +433,46 @@
 
             <!-- قارئ الـ PDF -->
             <div id="view-reader" class="hidden h-full flex-col bg-gray-900 rounded-3xl overflow-hidden shadow-2xl relative">
-                <div class="bg-gray-800 text-white p-3 md:p-4 flex justify-between items-center gap-2 z-10 shadow-md">
-                    <button onclick="closeReader()" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> <span class="hidden md:inline">إغلاق</span>
+                <!-- الشريط الفوقاني: الخروج + العنوان + الأزرار -->
+                <div class="reader-bar reader-top bg-gray-800 text-white px-2 py-2 md:p-4 flex justify-between items-center gap-1.5 md:gap-2 z-10 shadow-md">
+                    <button onclick="closeReader()" class="bg-red-500 hover:bg-red-600 w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 shrink-0" title="إغلاق">
+                        <svg class="w-5 h-5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> <span class="hidden md:inline">إغلاق</span>
                     </button>
-                    <span id="readerTitle" class="font-bold text-center flex-1 truncate px-2">عنوان الكتاب</span>
-                    <button id="readerAddBtn" onclick="addCurrentToLibrary(this)" class="hidden bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg text-xs md:text-sm font-bold transition whitespace-nowrap" title="زيد هاد الكتاب لمكتبتي باش يتحفظ فين وصلتي">➕ <span class="hidden md:inline">زيد لمكتبتي</span></button>
-                    <button onclick="openBookDetails(currentReadingBookId)" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm font-bold transition" title="التفاصيل والتقييم">⭐</button>
-                    <div class="flex items-center gap-1 bg-gray-700 px-2 py-1.5 rounded-lg text-sm" dir="ltr">
-                        <button onclick="zoomReader(-0.2)" class="hover:text-blue-400 px-1 font-bold" title="تصغير">−</button>
-                        <button onclick="zoomReader(0.2)" class="hover:text-blue-400 px-1 font-bold" title="تكبير">+</button>
-                        <span class="w-px h-5 bg-gray-500 mx-1"></span>
-                        <span id="pdfPageControls" class="flex items-center gap-1">
-                            <button onclick="prevPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
-                            <input type="number" id="page_num_input" onchange="goToPage(this.value)" class="w-12 text-center bg-gray-600 text-white font-bold rounded outline-none focus:ring-2 focus:ring-blue-500" value="1">
-                            <span>/ <span id="page_count">?</span></span>
-                            <button onclick="nextPage()" class="hover:text-blue-400 p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
-                        </span>
-                        <span id="docProgressLabel" class="hidden font-bold px-2">0%</span>
-                    </div>
+                    <span id="readerTitle" class="font-bold text-center flex-1 truncate px-1 text-sm md:text-base">عنوان الكتاب</span>
+                    <button id="readerAddBtn" onclick="addCurrentToLibrary(this)" class="hidden bg-green-600 hover:bg-green-700 h-10 md:h-auto px-3 md:py-2 rounded-lg text-xs md:text-sm font-bold transition whitespace-nowrap shrink-0" title="زيد هاد الكتاب لمكتبتي باش يتحفظ فين وصلتي">➕ <span class="hidden md:inline">زيد لمكتبتي</span></button>
+                    <button onclick="openBookDetails(currentReadingBookId)" class="bg-gray-700 hover:bg-gray-600 w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 rounded-lg text-sm font-bold transition shrink-0" title="التفاصيل والتقييم">⭐</button>
+                    <button id="readerFsBtn" onclick="toggleImmersive()" class="bg-gray-700 hover:bg-gray-600 w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 rounded-lg transition flex items-center justify-center shrink-0" title="ملء الشاشة">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"></path></svg>
+                    </button>
                 </div>
-                <div class="flex-1 overflow-auto flex justify-center items-start p-4 bg-gray-900 relative" id="canvasContainer">
+                <div class="flex-1 overflow-auto flex justify-start items-start p-2 md:p-4 bg-gray-900 relative" id="canvasContainer">
                     <div id="readerLoading" class="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-300 text-sm font-bold"><div class="spinner"></div><span id="readerLoadingText">جاري تحميل الكتاب...</span></div>
-                    <canvas id="pdf-render" class="shadow-2xl max-w-full h-auto bg-white"></canvas>
+                    <canvas id="pdf-render" class="shadow-2xl h-auto bg-white mx-auto shrink-0"></canvas>
                     <!-- القارئ ديال ملفات Word -->
-                    <article id="docReader" dir="auto" class="hidden doc-reader bg-white text-gray-900 w-full max-w-3xl rounded-lg shadow-2xl px-5 py-8 md:px-12 md:py-12"></article>
+                    <article id="docReader" dir="auto" class="hidden doc-reader bg-white text-gray-900 w-full max-w-3xl mx-auto rounded-lg shadow-2xl px-5 py-8 md:px-12 md:py-12"></article>
                 </div>
+                <!-- الشريط التحتاني: التنقل بين الصفحات (قريب للصبع ف التيليفون) -->
+                <div class="reader-bar reader-bottom bg-gray-800 text-white px-2 py-1.5 flex items-center justify-center gap-2 z-10" dir="ltr">
+                    <div class="flex items-center bg-gray-700 rounded-lg">
+                        <button onclick="zoomReader(-0.2)" class="w-10 h-10 font-bold text-lg hover:text-blue-400" title="تصغير">−</button>
+                        <button onclick="zoomReader(0.2)" class="w-10 h-10 font-bold text-lg hover:text-blue-400" title="تكبير">+</button>
+                    </div>
+                    <span id="pdfPageControls" class="flex items-center gap-1.5">
+                        <!-- الكتب بالعربية: الصفحة الجاية على اليسار -->
+                        <button onclick="nextPage()" class="w-11 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center" title="الصفحة الجاية"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg></button>
+                        <span class="flex items-center gap-1 text-sm font-bold">
+                            <input type="number" id="page_num_input" onchange="goToPage(this.value)" inputmode="numeric" class="w-12 h-9 text-center bg-gray-600 text-white font-bold rounded outline-none focus:ring-2 focus:ring-blue-500" value="1">
+                            <span>/ <span id="page_count">?</span></span>
+                        </span>
+                        <button onclick="prevPage()" class="w-11 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center" title="الصفحة اللي فاتت"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg></button>
+                    </span>
+                    <span id="docProgressLabel" class="hidden font-bold px-2">0%</span>
+                </div>
+                <!-- ملء الشاشة: زر الخروج ديما باين + رقم الصفحة -->
+                <button id="readerExitFs" onclick="toggleImmersive(false)" class="reader-fs-only absolute top-3 left-3 z-20 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur-sm" title="خروج من ملء الشاشة">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4"></path></svg>
+                </button>
+                <span id="readerPagePill" class="reader-fs-only absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-black/55 text-white text-xs font-bold pointer-events-none" dir="ltr"></span>
             </div>
 
         </div>
@@ -1005,7 +1052,7 @@
         // 5. جلب البيانات
         // =====================================================================
         async function loadEverything() {
-            await Promise.all([loadProfile(), loadLibrary(), loadCommunity(), loadFriends(), loadMessages(), loadReviewStats()]);
+            await Promise.all([loadProfile(), loadLibrary(), loadCommunity(), loadFriends(), loadMessages(), loadReviewStats(), loadNotifySettings()]);
             renderAll();
             subscribeRealtime();
         }
@@ -1061,7 +1108,8 @@
             if (realtimeChannel) sb.removeChannel(realtimeChannel);
             let timer = null;
             realtimeChannel = sb.channel('mk-live')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, payload => {
+                    notifyFriendship(payload);
                     clearTimeout(timer);
                     timer = setTimeout(async () => { await Promise.all([loadFriends(), loadCommunity()]); renderAll(); }, 300);
                 })
@@ -1069,6 +1117,124 @@
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => onMessageInsert(payload.new))
                 .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => onMessageUpdate(payload.new))
                 .subscribe();
+        }
+
+        // =====================================================================
+        // الإشعارات: صوت الجرس + إشعارات المتصفح + الإيميل
+        // =====================================================================
+        let notifPrefs = { sound: true, desktop: false };
+        try { Object.assign(notifPrefs, JSON.parse(localStorage.getItem('mk-notif') || '{}')); } catch (e) {}
+        function setNotifPref(k, v) { notifPrefs[k] = v; try { localStorage.setItem('mk-notif', JSON.stringify(notifPrefs)); } catch (e) {} renderNotifSettings(); }
+
+        // المتصفحات ما كيخليوش الصوت يخدم حتى يورك المستخدم على الصفحة مرة وحدة
+        let audioCtx = null;
+        function unlockAudio() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {}
+        }
+        ['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
+
+        // رنة صغيرة (بلا ملف صوتي): جوج نغمات للرسائل، تلاتة لطلبات الصداقة
+        function playChime(kind = 'msg', force = false) {
+            if ((!notifPrefs.sound && !force) || !audioCtx || audioCtx.state === 'closed') return;
+            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+            const notes = kind === 'friend' ? [784, 988, 1319] : [988, 1319];
+            const t0 = audioCtx.currentTime + 0.03;
+            notes.forEach((f, i) => {
+                const t = t0 + i * 0.13;
+                const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.value = f;
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(0.22, t + 0.015);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+                osc.connect(g).connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.65);
+            });
+        }
+
+        function desktopNotifSupported() { return 'Notification' in window; }
+        async function toggleDesktopNotif() {
+            if (!desktopNotifSupported()) { toast('المتصفح ديالك ما كيدعمش هاد الإشعارات', 'error'); return; }
+            if (notifPrefs.desktop && Notification.permission === 'granted') { setNotifPref('desktop', false); return; }
+            if (Notification.permission === 'denied') { toast('الإشعارات مسدودة. حلها من إعدادات المتصفح (القفل 🔒 حدا الرابط)', 'error'); return; }
+            const r = await Notification.requestPermission();
+            setNotifPref('desktop', r === 'granted');
+            if (r === 'granted') showDesktopNotif('🔔 الإشعارات خدامة', 'غادي تبان ليك هنا ملي توصلك رسالة', 'mk-test', true);
+        }
+        function showDesktopNotif(title, body, tag, force = false) {
+            if (!desktopNotifSupported() || !notifPrefs.desktop || Notification.permission !== 'granted') return;
+            if (!force && document.visibilityState === 'visible') return;   // إلا كنتي ف الصفحة، الـ toast كافي
+            try {
+                const n = new Notification(title, { body, tag, icon: 'https://cdn-icons-png.flaticon.com/512/2232/2232688.png' });
+                n.onclick = () => { window.focus(); n.close(); };
+            } catch (e) {}   // بعض التيليفونات ما كيقبلوش new Notification
+        }
+
+        // كل حاجة جديدة كتخص المستخدم
+        function notifyIncoming(kind, title, body, tag) {
+            playChime(kind);
+            showDesktopNotif(title, body, tag);
+        }
+        async function notifyFriendship(payload) {
+            if (!me) return;
+            const row = payload.new || {};
+            const name = async id => {
+                const known = readers.find(p => p.id === id) || (friends.concat(incoming, outgoing).find(r => r.profile.id === id) || {}).profile;
+                if (known) return known.username;
+                const { data } = await sb.from('profiles').select('username').eq('id', id).maybeSingle();
+                return data ? data.username : '';
+            };
+            if (payload.eventType === 'INSERT' && row.addressee_id === me.id && row.status === 'pending') {
+                const n = await name(row.requester_id);
+                toast(`👥 ${n ? n + ' صيفط ليك' : 'وصلك'} طلب صداقة جديد`);
+                notifyIncoming('friend', '👥 طلب صداقة جديد', n ? `${n} بغا يولي صديقك` : 'دخل لـ الأصدقاء باش تشوفو', 'mk-friend-' + row.id);
+            } else if (payload.eventType === 'UPDATE' && row.requester_id === me.id && row.status === 'accepted') {
+                const n = await name(row.addressee_id);
+                toast(`🎉 ${n || 'صديق جديد'} قبل طلب الصداقة ديالك`, 'success');
+                notifyIncoming('friend', '🎉 قبلو طلب الصداقة ديالك', n ? `${n} ولا صديقك` : 'عندك صديق جديد', 'mk-friend-' + row.id);
+            }
+        }
+
+        // الإيميل: كيتحكم فيه السيرفر (supabase/005_notifications.sql)
+        let emailNotif = null;   // null = التحديث 005 ما تشغلش
+        async function loadNotifySettings() {
+            const { data, error } = await sb.from('notify_settings').select('email_enabled').eq('user_id', me.id).maybeSingle();
+            emailNotif = error ? null : (data ? data.email_enabled : true);
+            renderNotifSettings();
+            touchPresence(true);
+        }
+        async function setEmailNotif(on) {
+            const prev = emailNotif; emailNotif = on;
+            const { error } = await sb.from('notify_settings').upsert({ user_id: me.id, email_enabled: on }, { onConflict: 'user_id' });
+            if (error) { emailNotif = prev; toast(errMsg(error), 'error'); }
+            else toast(on ? 'غادي توصلك الإشعارات ف الإيميل 📧' : 'طفيتي الإيميلات', 'success');
+            renderNotifSettings();
+        }
+        // "راني هنا": باش ما نصيفطوش إيميل على رسالة شفتيها ف الموقع
+        let lastPresence = 0;
+        function touchPresence(force) {
+            if (!me || emailNotif === null || document.visibilityState !== 'visible') return;
+            if (force !== true && Date.now() - lastPresence < 50000) return;
+            lastPresence = Date.now();
+            sb.rpc('touch_presence').then(() => {}, () => {});
+        }
+        setInterval(touchPresence, 60000);
+        document.addEventListener('visibilitychange', () => touchPresence(true));
+
+        function renderNotifSettings() {
+            const s = document.getElementById('notifSound'); if (!s) return;
+            s.checked = !!notifPrefs.sound;
+            const btn = document.getElementById('notifDesktopBtn'); const hint = document.getElementById('notifDesktopHint');
+            const on = desktopNotifSupported() && notifPrefs.desktop && Notification.permission === 'granted';
+            btn.textContent = on ? 'طفي' : 'شعل';
+            btn.style.backgroundColor = on ? '#6b7280' : 'var(--primary)';
+            if (!desktopNotifSupported()) { btn.disabled = true; btn.classList.add('opacity-50'); hint.textContent = 'المتصفح ديالك ما كيدعمهاش (خدم بالإيميل)'; }
+            else if (Notification.permission === 'denied') hint.textContent = 'مسدودة ف المتصفح: حلها من القفل 🔒 حدا الرابط';
+            else hint.textContent = on ? 'خدامة ✅ كتبان حتى إلا كنتي ف شي صفحة أخرى' : 'تبان ليك حتى إلا كنتي ف شي صفحة أخرى';
+            document.getElementById('notifEmailRow').classList.toggle('hidden', emailNotif === null);
+            document.getElementById('notifEmail').checked = !!emailNotif;
         }
 
         // =====================================================================
@@ -1291,6 +1457,7 @@
             document.getElementById('profileBioInput').value = myProfile.bio || '';
             document.getElementById('profileUsernameInput').value = myProfile.username;
             document.getElementById('profileDiscoverable').checked = myProfile.discoverable !== false;
+            renderNotifSettings();
             const img = document.getElementById('profileAvatar'); const ph = document.getElementById('profileAvatarPlaceholder');
             if (myProfile.avatar_path) { img.src = publicImageUrl(myProfile.avatar_path); img.classList.remove('hidden'); ph.classList.add('hidden'); }
             else { img.classList.add('hidden'); ph.classList.remove('hidden'); }
@@ -1330,6 +1497,7 @@
         function openModal(id) { const m = document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); setTimeout(() => m.classList.remove('opacity-0'), 10); }
         function closeModal(id) { const m = document.getElementById(id); m.classList.add('opacity-0'); setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300); }
         document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && immersive && currentView === 'reader') { toggleImmersive(false); return; }
             if (e.key === 'Escape') document.querySelectorAll('.modal').forEach(m => { if (!m.classList.contains('hidden')) closeModal(m.id); });
             if (currentView === 'reader' && !e.target.matches('input, textarea')) {
                 if (docMode) {   // Word: الأسهم كيسكرولاو شاشة كاملة
@@ -2137,10 +2305,12 @@
             const other = otherOf(m);
             const viewing = currentView === 'chat' && activeChatId === other && document.visibilityState === 'visible';
             if (m.recipient_id === me.id) {
-                if (viewing) markRead(other);
+                const p = friendProfile(other);
+                const preview = m.body ? m.body.slice(0, 80) : '📚 شارك معاك كتاب';
+                if (viewing) { markRead(other); playChime('msg'); }
                 else {
-                    const p = friendProfile(other);
-                    if (p) toast(`💬 ${p.username}: ${m.body ? m.body.slice(0, 60) : '📚 شارك معاك كتاب'}`);
+                    if (p) toast(`💬 ${p.username}: ${preview}`);
+                    notifyIncoming('msg', `💬 ${p ? p.username : 'رسالة جديدة'}`, preview, 'mk-chat-' + other);
                 }
             }
             afterMessagesChanged(other, m.sender_id === me.id);
@@ -2347,6 +2517,7 @@
             const max = docContainer.scrollHeight - docContainer.clientHeight;
             const frac = max > 0 ? Math.min(1, docContainer.scrollTop / max) : 1;
             document.getElementById('docProgressLabel').textContent = Math.round(frac * 100) + '%';
+            updatePagePill();
             if (!save || docRestoring) return;
             const book = library.find(b => b.id === currentReadingBookId);
             if (!book) return;   // ماشي ف مكتبتي: ما كنحفظوش
@@ -2363,7 +2534,8 @@
             if (!currentPdfDoc) return;
             pageRendering = true;
             currentPdfDoc.getPage(num).then(page => {
-                const containerW = document.getElementById('canvasContainer').clientWidth - 32;
+                const box = document.getElementById('canvasContainer'), cs = getComputedStyle(box);
+                const containerW = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
                 const fit = containerW / page.getViewport({ scale: 1 }).width;
                 const vp = page.getViewport({ scale: Math.min(fit, 1.6) * readerZoom * (window.devicePixelRatio || 1) });
                 canvas.width = vp.width; canvas.height = vp.height;
@@ -2372,6 +2544,7 @@
             }).then(() => {
                 pageRendering = false;
                 document.getElementById('page_num_input').value = num;
+                updatePagePill();
                 document.getElementById('canvasContainer').scrollTop = 0;
                 if (pageNumPending !== null) { const n = pageNumPending; pageNumPending = null; renderPage(n); }
                 scheduleProgressSave(num);
@@ -2404,6 +2577,7 @@
         }
 
         function stopReader() {
+            if (immersive) toggleImmersive(false);
             readerToken++;
             if (saveTimer) { clearTimeout(saveTimer); const b = library.find(x => x.id === currentReadingBookId); if (b) flushProgress(b.id, { current_page: b.st.current_page, progress: b.st.progress, is_read: b.st.is_read }); saveTimer = null; }
             if (currentPdfDoc) { currentPdfDoc.destroy(); currentPdfDoc = null; }
@@ -2429,6 +2603,101 @@
             } catch (e) { console.warn('repairBookMeta', e); }
         }
 
+        // =====================================================================
+        // ملء الشاشة + اللمس ف القارئ
+        // =====================================================================
+        let immersive = false;
+        const FS_ICON_ENTER = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"></path></svg>';
+        const FS_ICON_EXIT = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4"></path></svg>';
+        const readerBox = document.getElementById('canvasContainer');
+
+        function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement; }
+        function toggleImmersive(on = !immersive) {
+            if (on === immersive) return;
+            // Word: نبقاو ف نفس البلاصة من بعد ما يتبدل العرض
+            const max = readerBox.scrollHeight - readerBox.clientHeight;
+            const frac = docMode && max > 0 ? readerBox.scrollTop / max : null;
+            immersive = on;
+            const el = document.getElementById('view-reader');
+            el.classList.toggle('immersive', on); el.classList.remove('show-bars');
+            const btn = document.getElementById('readerFsBtn');
+            btn.innerHTML = on ? FS_ICON_EXIT : FS_ICON_ENTER;
+            btn.title = on ? 'خروج من ملء الشاشة' : 'ملء الشاشة';
+            const root = document.documentElement;
+            if (on) {
+                try {   // ملء الشاشة ديال المتصفح (آيفون ما كيقبلوش، ولكن القارئ كياخد الشاشة كاملة على أي حال)
+                    const req = root.requestFullscreen || root.webkitRequestFullscreen;
+                    if (req && !fsElement()) { const r = req.call(root, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); }
+                } catch (e) {}
+                history.pushState({ mkImmersive: true }, '');   // زر "رجوع" ف التيليفون كيخرج من ملء الشاشة
+                let seen = 0; try { seen = +localStorage.getItem('mk-fs-hint') || 0; localStorage.setItem('mk-fs-hint', seen + 1); } catch (e) {}
+                if (seen < 3) toast('👆 اليسار: الصفحة الجاية • اليمين: اللي فاتت • الوسط: الأزرار');
+            } else {
+                try {
+                    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+                    else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
+                } catch (e) {}
+                if (history.state && history.state.mkImmersive) history.back();
+            }
+            updatePagePill();
+            setTimeout(() => {
+                if (currentPdfDoc && !docMode) queueRenderPage(pageNum);
+                if (frac !== null) readerBox.scrollTop = frac * (readerBox.scrollHeight - readerBox.clientHeight);
+            }, 300);
+        }
+        ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => { if (!fsElement() && immersive) toggleImmersive(false); }));
+        window.addEventListener('popstate', () => { if (immersive) toggleImmersive(false); });
+
+        function updatePagePill() {
+            const el = document.getElementById('readerPagePill'); if (!el) return;
+            if (docMode) el.textContent = document.getElementById('docProgressLabel').textContent;
+            else el.textContent = currentPdfDoc ? `${pageNum} / ${currentPdfDoc.numPages}` : '';
+        }
+
+        // الكتاب كيتعاود يترسم ملي يتبدل العرض (دوران التيليفون، ملء الشاشة...)، ماشي ملي يتبدل الطول بوحدو
+        let readerResizeTimer = null, lastReaderW = 0;
+        window.addEventListener('resize', () => {
+            clearTimeout(readerResizeTimer);
+            readerResizeTimer = setTimeout(() => {
+                const w = readerBox.clientWidth;
+                if (currentView === 'reader' && currentPdfDoc && !docMode && w !== lastReaderW) queueRenderPage(pageNum);
+                lastReaderW = w;
+            }, 250);
+        });
+
+        function readerForward() { if (docMode) readerBox.scrollBy({ top: readerBox.clientHeight * 0.9, behavior: 'smooth' }); else nextPage(); }
+        function readerBack() { if (docMode) readerBox.scrollBy({ top: -readerBox.clientHeight * 0.9, behavior: 'smooth' }); else prevPage(); }
+
+        // اللمس: ورك على اليسار/اليمين باش تقلب الصفحة، الوسط كيبين الأزرار ف ملء الشاشة، وسحب الصبع كيقلب حتى هو
+        let touchStart = null;
+        readerBox.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1) { touchStart = null; return; }
+            const t = e.touches[0];
+            touchStart = { x: t.clientX, y: t.clientY, time: Date.now(), sl: readerBox.scrollLeft, st: readerBox.scrollTop };
+        }, { passive: true });
+        readerBox.addEventListener('touchmove', e => { if (e.touches.length > 1) touchStart = null; }, { passive: true });
+        readerBox.addEventListener('touchend', e => {
+            const s = touchStart; touchStart = null;
+            if (!s || currentView !== 'reader' || e.touches.length) return;
+            if (e.target.closest('a, button, input, textarea')) return;
+            if (window.getSelection && String(window.getSelection()).trim()) return;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - s.x, dy = t.clientY - s.y, dt = Date.now() - s.time;
+            const scrolled = Math.abs(readerBox.scrollLeft - s.sl) > 2 || Math.abs(readerBox.scrollTop - s.st) > 2;
+            if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && dt < 450 && !scrolled) {
+                const r = readerBox.getBoundingClientRect(), x = t.clientX - r.left;
+                if (x < r.width * 0.3) readerForward();          // الكتب بالعربية: اليسار = الجاية
+                else if (x > r.width * 0.7) readerBack();
+                else if (immersive) document.getElementById('view-reader').classList.toggle('show-bars');
+                return;
+            }
+            // السحب: غير ف PDF وملي الصفحة ما كبراش على الشاشة (باش ما يتخلطش مع التحريك ديال الزوم)
+            if (!docMode && currentPdfDoc && dt < 700 && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5
+                && readerBox.scrollWidth <= readerBox.clientWidth + 2) {
+                if (dx > 0) nextPage(); else prevPage();
+            }
+        }, { passive: true });
+
         function closeReader() { switchView(views.includes(readerReturnView) && readerReturnView !== 'reader' ? readerReturnView : 'library'); }
 
         // عجبك الكتاب وانت كتقراه؟ زيدو لمكتبتك وكيتحفظ من الصفحة اللي واقف فيها
@@ -2438,19 +2707,6 @@
             const ok = await addToLibrary(id, btn, { current_page: pageNum, progress: Math.round((pageNum / total) * 100) });
             if (ok) btn.classList.add('hidden');
         }
-
-        // سحب بالصبع ف التيليفون
-        (() => {
-            let x0 = null;
-            const c = document.getElementById('canvasContainer');
-            c.addEventListener('touchstart', e => { x0 = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
-            c.addEventListener('touchend', e => {
-                if (x0 === null) return;
-                const dx = e.changedTouches[0].clientX - x0; x0 = null;
-                if (docMode) return;   // Word كيتقرا بالسكرول العادي
-                if (Math.abs(dx) > 60) { dx > 0 ? nextPage() : prevPage(); } // RTL
-            });
-        })();
 
         // =====================================================================
         // 14. الإعدادات
